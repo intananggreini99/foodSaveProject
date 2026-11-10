@@ -1,6 +1,6 @@
 # FoodSave Restaurant
 
-Sistem prediksi sampah makanan restoran dan rekomendasi pengurangan jumlah porsi berbasis Machine Learning, dengan dashboard web untuk manajer restoran.
+Sistem prediksi limbah makanan restoran dan rekomendasi pengurangan jumlah porsi berbasis Machine Learning, dengan dashboard web untuk manajer restoran.
 
 ## Deskripsi
 
@@ -118,9 +118,9 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 ## Evaluasi
 
-Metrik: MAE (utama), RMSE, R2, waktu training, waktu prediksi. Hasil di `results/experiment_results.csv`.
+Metrik lengkap tersedia di `results/evaluation/experiment_results.csv`: delapan eksperimen dari empat model dengan dua metode preprocessing, beserta metrik train, validation, dan test, konfigurasi, serta waktu proses. Pemenang dipilih berdasarkan MAE validation.
 
-> Hasil eksperimen diisi setelah training dan evaluasi selesai.
+`results/experiment_results.csv` merupakan template awal yang belum berisi hasil; gunakan file di folder `evaluation` untuk membaca hasil eksperimen yang sudah dijalankan.
 
 ## Catatan Validitas
 
@@ -223,3 +223,41 @@ output tambahan akan kosong kembali. Jangan jalankan untuk sekadar membaca hasil
 Laporan Word/PDF dan gambar hasil eksperimen disimpan lokal dan diabaikan Git.
 Output gambar yang tertanam di notebook dibersihkan untuk menjaga diff tetap ringan.
 Kode visualisasi tetap tersedia sehingga gambar dapat dibuat ulang saat dijalankan.
+
+## Backend PostgreSQL dan Mailpit
+
+Backend menyimpan akun/restoran, pengaturan, input harian, koreksi, riwayat model
+dan prediksi, rencana mingguan, simulasi, impor, tugas, insight, notifikasi,
+laporan, dan antrean email pada PostgreSQL. File upload/laporan menggunakan
+volume terpisah; model dipasang read-only.
+
+```powershell
+python -m api.init_env
+docker-compose up -d --build
+docker-compose ps
+```
+
+- API dan Swagger: http://localhost:8000/docs
+- Readiness API/database/model: http://localhost:8000/health/ready
+- Kotak masuk email pengujian Mailpit: http://localhost:8025
+- PostgreSQL lokal: `localhost:5433`, database `foodsave`
+
+Pengiriman email tahap ini hanya ke Mailpit lokal, bukan internet. Model aktif
+adalah Random Forest Robust; metadata delapan eksperimen disimpan terpisah
+sehingga hasil prediksi dapat ditelusuri ke versinya.
+
+Panduan lengkap tersedia pada [panduan pengujian backend](api/docs/BACKEND_TESTING.md)
+dan [pemeriksaan model](api/docs/MODEL_VALIDATION.md).
+
+Pengujian cepat dari host:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-test.txt
+.\.venv\Scripts\python.exe -m api.test_backend --prepare
+.\.venv\Scripts\python.exe -m api.check_model --database
+.\.venv\Scripts\python.exe -m api.smoke_backend
+```
+
+Tes otomatis menggunakan database `foodsave_test`. Smoke test HTTP membuat
+restoran DEMO tersendiri pada aplikasi. Kredensial `.env` dan hasil tes lokal
+diabaikan Git. Frontend akan dihubungkan pada tahap berikutnya.
