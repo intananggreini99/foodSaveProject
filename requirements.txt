@@ -12,3 +12,7 @@ jupyter
 fastapi
 uvicorn
 pydantic
+nbformat
+nbclient
+ipykernel
+python-docx

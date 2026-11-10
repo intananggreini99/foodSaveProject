@@ -1,5 +1,6 @@
 # Python
 venv/
+.venv/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
@@ -17,3 +18,15 @@ web/.env.local
 .DS_Store
 Thumbs.db
 .vscode/
+results/evaluation/report-page-*.png
+results/evaluation/report_qa.pdf
+
+# Laporan dan gambar hasil eksperimen hanya disimpan lokal
+results/**/*.docx
+results/**/*.pdf
+results/**/*.png
+results/**/*.jpg
+results/**/*.jpeg
+results/**/*.svg
+results/**/*.webp
+results/evaluation/report_verification.json
