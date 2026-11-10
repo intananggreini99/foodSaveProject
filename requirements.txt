@@ -16,3 +16,5 @@ nbformat
 nbclient
 ipykernel
 python-docx
+-r requirements-api.txt
+-r requirements-report.txt

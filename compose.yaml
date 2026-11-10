@@ -1,0 +1,98 @@
+name: foodsave
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-foodsave}
+      POSTGRES_USER: ${POSTGRES_USER:-foodsave}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Isi POSTGRES_PASSWORD di .env}
+      TZ: Asia/Jakarta
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    stop_grace_period: 30s
+
+  api:
+    image: foodsave-api:local
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    restart: unless-stopped
+    environment: &api_environment
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-foodsave}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-foodsave}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:8000}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
+      SESSION_DAYS: ${SESSION_DAYS:-7}
+      STORAGE_PATH: /app/storage
+      MODEL_MANIFEST: /app/models/best_model/selected_model.json
+      MPLCONFIGDIR: /tmp/matplotlib
+      TZ: Asia/Jakarta
+      MAIL_BACKEND: mailpit
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM: ${SMTP_FROM:-foodsave@example.test}
+      SMTP_TIMEOUT_SECONDS: 10
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    volumes:
+      - ./models:/app/models:ro
+      - ./results/evaluation/experiment_results.csv:/app/results/evaluation/experiment_results.csv:ro
+      - uploads_data:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=4)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 5
+
+  mailpit:
+    image: axllent/mailpit:v1.27.4
+    restart: unless-stopped
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      MP_MAX_MESSAGES: 5000
+      MP_DISABLE_VERSION_CHECK: "true"
+      TZ: Asia/Jakarta
+    volumes:
+      - mailpit_data:/data
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mail-worker:
+    image: foodsave-api:local
+    restart: unless-stopped
+    environment: *api_environment
+    volumes:
+      - uploads_data:/app/storage:ro
+    command: ["python", "-m", "api.email_worker"]
+    depends_on:
+      api:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  uploads_data:
+  mailpit_data:

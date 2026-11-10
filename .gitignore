@@ -30,3 +30,16 @@ results/**/*.jpeg
 results/**/*.svg
 results/**/*.webp
 results/evaluation/report_verification.json
+
+# Konfigurasi rahasia, unggahan, dan hasil tes backend lokal
+.env
+.env.*
+!.env.example
+storage/
+.pytest_cache/
+api/tests/.pytest_cache/
+*.sqlite
+*.sqlite3
+results/backend-test-report.json
+results/backend-*.json
+results/backend/

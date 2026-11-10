@@ -1,0 +1,4 @@
+-r requirements-api.txt
+-r requirements-report.txt
+pytest>=8,<10
+httpx>=0.28,<1
