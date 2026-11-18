@@ -1,2 +1,0 @@
-# Pembuatan laporan operasional PDF; Excel memakai openpyxl di runtime inti.
-reportlab==4.4.1

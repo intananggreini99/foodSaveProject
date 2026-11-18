@@ -1,1 +1,0 @@
-"""Pengujian integrasi PostgreSQL."""

@@ -3,43 +3,37 @@ venv/
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 .ipynb_checkpoints/
 
-# Dataset mentah (besar)
+# Rahasia dan penyimpanan lokal
+.env
+.env.*
+!.env.example
+storage/
+backup/
+mlruns/
+mlflow.db
+
+# Dataset mentah: hanya train.csv (seed HDFS) yang disertakan
 dataset/raw/*
-!dataset/raw/.gitkeep
+!dataset/raw/train.csv
 
 # Next.js
 web/node_modules/
 web/.next/
 web/.env.local
 
+# Hasil riset lama yang besar
+research/results/**/*.docx
+research/results/**/*.pdf
+research/results/**/*.png
+research/results/**/*.jpg
+research/results/**/*.jpeg
+research/results/**/*.svg
+research/results/**/*.webp
+
 # Sistem
 .DS_Store
 Thumbs.db
 .vscode/
-results/evaluation/report-page-*.png
-results/evaluation/report_qa.pdf
-
-# Laporan dan gambar hasil eksperimen hanya disimpan lokal
-results/**/*.docx
-results/**/*.pdf
-results/**/*.png
-results/**/*.jpg
-results/**/*.jpeg
-results/**/*.svg
-results/**/*.webp
-results/evaluation/report_verification.json
-
-# Konfigurasi rahasia, unggahan, dan hasil tes backend lokal
-.env
-.env.*
-!.env.example
-storage/
-.pytest_cache/
-api/tests/.pytest_cache/
-*.sqlite
-*.sqlite3
-results/backend-test-report.json
-results/backend-*.json
-results/backend/

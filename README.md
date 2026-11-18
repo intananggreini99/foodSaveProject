@@ -1,263 +1,367 @@
 # FoodSave Restaurant
 
-Sistem prediksi limbah makanan restoran dan rekomendasi pengurangan jumlah porsi berbasis Machine Learning, dengan dashboard web untuk manajer restoran.
-
-## Deskripsi
-
-FoodSave Restaurant memperkirakan jumlah food waste harian (kg) dari data operasional restoran. Hasil ditampilkan bersama rentang estimasi, tingkat risiko (Aman / Waspada / Tinggi), dan simulasi what-if pengurangan porsi sebelum makanan dipersiapkan.
-
-Proyek membandingkan 4 model dengan 2 pendekatan preprocessing (8 eksperimen):
-
-| Model | Jenis |
-|---|---|
-| LSTM | Deep Learning |
-| Random Forest Regressor | Ensemble Learning |
-| XGBoost Regressor | Gradient Boosting |
-| CatBoost Regressor | Gradient Boosting |
-
-Preprocessing: **Standard** dan **Robust**.
+Prediksi limbah makanan harian restoran (kg) dan simulasi pengurangan porsi, dengan model
+Random Forest yang dilatih ulang lewat pipeline MLflow dan disajikan oleh FastAPI.
 
 ## Arsitektur
 
 ```
-Dataset Kaggle -> EDA -> Preprocessing -> Training 8 eksperimen -> Model terbaik
-                                                                      |
-                              Next.js (web) <-> FastAPI (api) <-> models/best_model
+Pengguna ─▶ Frontend web (Next.js) ◀─REST─▶ FastAPI ◀──▶ PostgreSQL "foodsave"
+                                             │  API /api/v1       ├─ operational
+                                             │  pekerja laporan    ├─ prediction
+                                             │  layanan prediksi   └─ model_analysis
+                                             │        ▲ muat .pkl versi aktif
+                                             ▼        │
+   ekspor data aktual ──────────────────▶ Apache Hadoop HDFS ◀──────── MLflow (6 langkah)
+                                          raw / processed / models /   tracking: database "mlflow"
+                                          reports/evaluasi
 ```
+
+Penjelasan lengkap per komponen, aliran data, tabel, dan endpoint ada di
+[docs/ARSITEKTUR.md](docs/ARSITEKTUR.md).
+
+## Struktur folder
+
+```
+├── compose.yaml          semua layanan (PostgreSQL, HDFS, MLflow, FastAPI, pekerja, Mailpit)
+├── .env.example          contoh konfigurasi
+├── backend/              FastAPI: app/ (routers, services, workers), migrations/, tests/
+├── ml/                   pipeline MLflow: foodsave_ml/ (6 langkah), tests/
+├── shared/               paket foodsave_core: preprocessing + akses HDFS (dipakai backend & ml)
+├── infra/                konfigurasi Hadoop (bde2020) dan image MLflow
+├── dataset/raw/train.csv data mentah awal (diunggah ke HDFS saat start)
+├── docs/                 dokumentasi arsitektur
+├── research/             arsip riset lama (notebook, perbandingan 4 model); tidak dipakai runtime
+└── web/                  frontend Next.js (halaman status lokal + kerangka halaman fitur)
+```
+
+## Rilis lokal di laptop (localhost)
+
+Proyek ini dirilis untuk dipakai di laptop sendiri, bukan untuk deploy ke server atau
+internet. Semua port hanya terbuka di `127.0.0.1`, sehingga perangkat lain di jaringan
+Wi-Fi yang sama pun tidak bisa mengaksesnya. Yang dibutuhkan hanya Docker Desktop.
+
+Semua perintah di bawah diketik satu per satu di PowerShell. Tunggu satu perintah selesai
+tanpa error sebelum menjalankan perintah berikutnya.
+
+### Langkah 1: siapkan `.env` (sekali saja)
+
+```powershell
+cd D:\ProjectSistemCerdas\foodSaveProject
+Copy-Item .env.example .env
+notepad .env
+```
+
+Di Notepad, ganti nilai `POSTGRES_PASSWORD` (huruf dan angka saja), simpan, lalu tutup.
+
+### Langkah 2: cek port tidak bentrok
+
+```powershell
+Get-NetTCPConnection -State Listen -LocalPort 3010,8010,5434,5010,9871,8026 -ErrorAction SilentlyContinue
+```
+
+Tidak ada keluaran berarti semua port bebas. Bila muncul baris, lihat container mana yang
+memakai port tersebut:
+
+```powershell
+docker ps --format "{{.Names}}  {{.Ports}}"
+```
+
+Lalu ganti port yang bentrok di `.env` (variabel `FOODSAVE_*_PORT`; bila mengganti
+`FOODSAVE_WEB_PORT`, sesuaikan juga `CORS_ORIGINS`) dan cek lagi dengan nomor port baru.
+Bila FoodSave sedang menyala, port-port tersebut memang dipakai Docker (proses
+`com.docker.backend` atau `wslrelay`); itu normal.
+
+Windows juga bisa mencadangkan rentang port untuk Hyper-V/WSL. Port FoodSave tidak boleh
+berada di salah satu rentang yang tampil di sini:
+
+```powershell
+netsh interface ipv4 show excludedportrange protocol=tcp
+```
+
+### Langkah 3: build dan nyalakan semua layanan
+
+```powershell
+docker compose up -d --build
+```
+
+Start pertama ±5–10 menit (unduh image, build, lalu pelatihan model awal).
+
+### Langkah 4: tunggu sampai siap
+
+```powershell
+docker compose ps
+docker compose logs -f trainer-init
+```
+
+Tekan Ctrl+C setelah log pelatihan selesai; layanan tetap berjalan. Lalu cek:
+
+```powershell
+curl.exe -s http://localhost:8010/health/ready
+```
+
+Sistem siap bila hasilnya memuat `"status":"ready"`. Pakai `curl.exe`, bukan `curl`, karena
+di Windows PowerShell `curl` adalah nama lain `Invoke-WebRequest`.
+
+### Langkah 5: buka aplikasi
+
+```powershell
+Start-Process http://localhost:3010
+```
+
+### Pemakaian sehari-hari
+
+| Keperluan | Perintah |
+|---|---|
+| Nyalakan | `docker compose up -d` |
+| Cek siap | `curl.exe -s http://localhost:8010/health/ready` |
+| Status semua layanan | `docker compose ps` |
+| Log satu layanan | `docker compose logs -f api` (Ctrl+C untuk keluar) |
+| Matikan (data tetap tersimpan) | `docker compose stop` |
+| Setelah kode diubah | `docker compose up -d --build` |
+
+Layanan **tidak** menyala sendiri saat laptop dihidupkan. Jalankan `docker compose up -d`
+dari folder proyek setiap kali ingin memakai aplikasi. Bila sebuah layanan crash, Docker
+mencoba menyalakannya ulang paling banyak 5 kali.
+
+### Lokasi data
+
+Data disimpan di volume Docker di laptop ini, bukan di folder proyek:
+
+| Volume | Isi |
+|---|---|
+| `foodsave_postgres_data` | database `foodsave` (3 skema) dan `mlflow` |
+| `foodsave_hdfs_namenode`, `foodsave_hdfs_datanode` | HDFS: data mentah, data aktual, file `.pkl`, laporan evaluasi |
+| `foodsave_mlflow_artifacts` | artefak MLflow |
+| `foodsave_app_storage` | file unggahan dan laporan operasional |
+| `foodsave_mailpit_data` | email uji di Mailpit |
+
+Data tetap ada setelah `docker compose stop`, `docker compose down`, atau restart laptop.
+Data **terhapus** bila menjalankan `docker compose down -v` atau menghapus volume dari
+Docker Desktop, jadi backup lebih dulu.
+
+### Backup data
+
+FoodSave harus sedang menyala. Jalankan semua perintah di **jendela PowerShell yang sama**,
+karena perintah memakai variabel `$folder`. Bila `POSTGRES_USER` di `.env` diubah, ganti
+`foodsave` setelah `-U` dengan nama tersebut.
+
+Buat folder backup:
+
+```powershell
+$folder = "backup\" + (Get-Date -Format "yyyyMMdd-HHmmss")
+New-Item -ItemType Directory -Path $folder
+```
+
+Database aplikasi dan MLflow. `pg_dump` menulis file di dalam container lalu disalin,
+karena `pg_dump > file` di Windows PowerShell menyimpan file sebagai UTF-16 yang tidak bisa
+dipulihkan:
+
+```powershell
+docker compose exec -T postgres pg_dump -U foodsave -d foodsave --no-owner -f /tmp/foodsave.sql
+docker compose cp postgres:/tmp/foodsave.sql "$folder\foodsave.sql"
+docker compose exec -T postgres pg_dump -U foodsave -d mlflow --no-owner -f /tmp/mlflow.sql
+docker compose cp postgres:/tmp/mlflow.sql "$folder\mlflow.sql"
+docker compose exec -T postgres rm -f /tmp/foodsave.sql /tmp/mlflow.sql
+```
+
+HDFS (data mentah, data aktual, file `.pkl`, laporan evaluasi):
+
+```powershell
+docker compose exec -T namenode sh -c "rm -rf /tmp/hdfs_backup && hdfs dfs -get /foodsave /tmp/hdfs_backup"
+docker compose cp namenode:/tmp/hdfs_backup "$folder\hdfs"
+docker compose exec -T namenode rm -rf /tmp/hdfs_backup
+```
+
+Artefak MLflow dan file aplikasi:
+
+```powershell
+docker compose cp mlflow:/mlflow/artifacts "$folder\mlflow-artifacts"
+docker compose cp api:/app/storage "$folder\app-storage"
+```
+
+Periksa isinya. Harus ada `foodsave.sql`, `mlflow.sql`, `hdfs`, `mlflow-artifacts`, dan
+`app-storage`:
+
+```powershell
+Get-ChildItem $folder
+```
+
+Folder `backup\` tidak ikut ke git. Isi Mailpit tidak ikut di-backup.
+
+### Pulihkan dari backup
+
+Data FoodSave saat ini **diganti** isi backup. Cara ini juga berlaku untuk instalasi baru
+atau setelah `docker compose down -v`: jalankan Langkah 1–4 sampai siap, lalu perintah di
+bawah. Model aktif dari backup langsung dipakai lagi karena file `.pkl` dan checksum-nya ikut
+dipulihkan. Jalankan semua perintah di jendela PowerShell yang sama.
+
+Pilih folder backup (ganti nama folder dengan salah satu hasil `Get-ChildItem backup`):
+
+```powershell
+Get-ChildItem backup
+$folder = "backup\20261118-203000"
+```
+
+File aplikasi dan artefak MLflow, disalin selagi layanan `api` dan `mlflow` menyala:
+
+```powershell
+docker compose cp "$folder\app-storage\." api:/app/storage
+docker compose cp "$folder\mlflow-artifacts\." mlflow:/mlflow/artifacts
+docker compose exec -T -u root api chown -R foodsave:foodsave /app/storage
+docker compose exec -T -u root mlflow chown -R mlflow /mlflow/artifacts
+```
+
+Hentikan layanan yang memakai database:
+
+```powershell
+docker compose stop mlflow api report-worker exporter
+```
+
+Database aplikasi:
+
+```powershell
+docker compose exec -T postgres psql -U foodsave -d postgres -c "DROP DATABASE IF EXISTS foodsave WITH (FORCE)" -c "CREATE DATABASE foodsave OWNER foodsave"
+docker compose cp "$folder\foodsave.sql" postgres:/tmp/foodsave.sql
+docker compose exec -T postgres psql -U foodsave -d foodsave -v ON_ERROR_STOP=1 -q -f /tmp/foodsave.sql
+```
+
+Database MLflow:
+
+```powershell
+docker compose exec -T postgres psql -U foodsave -d postgres -c "DROP DATABASE IF EXISTS mlflow WITH (FORCE)" -c "CREATE DATABASE mlflow OWNER foodsave"
+docker compose cp "$folder\mlflow.sql" postgres:/tmp/mlflow.sql
+docker compose exec -T postgres psql -U foodsave -d mlflow -v ON_ERROR_STOP=1 -q -f /tmp/mlflow.sql
+docker compose exec -T postgres rm -f /tmp/foodsave.sql /tmp/mlflow.sql
+```
+
+HDFS (isi `/foodsave` diganti isi backup):
+
+```powershell
+docker compose exec -T namenode rm -rf /tmp/hdfs_restore
+docker compose cp "$folder\hdfs" namenode:/tmp/hdfs_restore
+docker compose exec -T namenode sh -c "hdfs dfs -rm -r -f -skipTrash /foodsave && hdfs dfs -put /tmp/hdfs_restore /foodsave && rm -rf /tmp/hdfs_restore"
+```
+
+Nyalakan lagi lalu cek:
+
+```powershell
+docker compose start mlflow api report-worker exporter
+curl.exe -s http://localhost:8010/health/ready
+```
+
+Bila salah satu perintah gagal di tengah jalan, layanan yang dihentikan tadi belum menyala.
+Perbaiki masalahnya lalu ulangi pemulihan dari awal, atau nyalakan dulu dengan
+`docker compose up -d`.
+
+### Hapus semua data (tidak bisa dibatalkan)
+
+```powershell
+docker compose down -v
+```
+
+### Detail start
+
+Urutan start otomatis: PostgreSQL → database `mlflow` + migrasi 3 skema → HDFS (namenode,
+datanode) → menunggu datanode hidup dan safemode mati → unggah `train.csv` ke HDFS → server
+MLflow → **pelatihan awal** (hanya bila belum ada model aktif, ±1 menit) → FastAPI dan pekerja.
+
+Port host dibuat berbeda dari project lain di laptop yang sama (SatisView memakai 3000, 5433,
+8080, 9870; CampusFlow memakai 8081, 8088). Semua bisa diubah lewat `FOODSAVE_*_PORT` di `.env`.
+
+| Layanan | Alamat |
+|---|---|
+| API + dokumentasi | http://localhost:8010/docs |
+| Status siap | http://localhost:8010/health/ready |
+| MLflow | http://localhost:5010 |
+| HDFS (namenode) | http://localhost:9871 |
+| Mailpit | http://localhost:8026 |
+| PostgreSQL | localhost:5434 |
+| Frontend web | http://localhost:3010 |
+
+Image Hadoop sama dengan project SatisView (`bde2020/hadoop-*:2.0.0-hadoop3.2.1-java8`),
+jadi tidak perlu diunduh ulang bila SatisView sudah pernah dijalankan. Kedua project memakai
+kluster HDFS dan jaringan Docker masing-masing.
+
+Uji seluruh sistem setelah semua layanan hidup (membuat restoran uji, menjalankan alur
+setiap halaman, uji beban, lalu menghapus data uji):
+
+```powershell
+docker compose exec api python -m app.tools.uji_sistem
+```
+
+Pelatihan ulang (misalnya setelah data aktual baru diekspor ke HDFS):
+
+```powershell
+docker compose run --rm trainer                      # versi baru langsung aktif
+docker compose run --rm trainer python -m foodsave_ml.pipeline --no-activate   # tanpa mengaktifkan
+```
+
+FastAPI memuat versi baru otomatis pada permintaan prediksi berikutnya.
+
+### Frontend web
+
+Layanan `web` di compose membangun dan menjalankan Next.js di container Linux. Ini cara yang
+disarankan di Windows: kebijakan Smart App Control/WDAC bisa memblokir biner native Next.js
+(`next-swc.win32-x64-msvc.node`) bila dijalankan langsung dengan `npm run dev`.
+
+```powershell
+docker compose up -d --build web      # hanya membangun ulang dan menjalankan frontend
+docker compose logs -f web
+```
+
+Menjalankan langsung di Windows (`cd web; npm install; npm run dev`) hanya berhasil bila
+Windows tidak memblokir file `.node` tersebut.
+
+### Bila ada masalah
+
+| Gejala | Penyebab dan solusi |
+|---|---|
+| `Bind for 0.0.0.0:XXXX failed: port is already allocated` | Port dipakai project lain. Cek seperti Langkah 2, ubah `FOODSAVE_*_PORT` di `.env`, lalu `docker compose up -d`. |
+| `pull access denied for foodsave-...` | Compose versi lama. Pastikan memakai `compose.yaml` terbaru (setiap image lokal punya `build` dan `pull_policy: build`). |
+| `hdfs-init` lama menunggu | Lihat `docker compose logs hdfs-init namenode datanode`. Pesan "Menunggu HDFS siap" normal selama datanode belum terdaftar (biasanya < 1 menit). |
+| `/health/ready` 503 "Belum ada model aktif" | Pelatihan awal belum selesai. Pantau `docker compose logs -f trainer-init`. |
+| `An Application Control policy has blocked this file ... next-swc` saat `npm run dev` | Windows memblokir biner Next.js. Jalankan frontend lewat Docker: `docker compose up -d --build web`. |
+| `'next' is not recognized` | Jalankan `npm install` di folder `web` sebelum `npm run dev` (atau pakai layanan `web` di Docker). |
+| Port masih bentrok setelah ganti `.env` | Hentikan dulu: `docker compose down`, lalu `docker compose up -d`. |
+
+Laptop yang menjalankan SatisView, CampusFlow, dan FoodSave bersamaan butuh RAM besar (dua
+kluster HDFS + Airflow). Hentikan project yang tidak dipakai dengan `docker compose stop`.
+
+## Menjalankan tanpa Docker (pengembangan)
+
+Butuh Python 3.12 dan PostgreSQL. HDFS diganti folder lokal dengan struktur path yang sama.
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r backend/requirements-dev.txt && pip install -e shared
+export DATABASE_URL=postgresql+psycopg://foodsave:PASSWORD@localhost:5434/foodsave
+export FOODSAVE_STORAGE=local LOCAL_STORAGE_ROOT=./storage/hdfs
+export MLFLOW_TRACKING_URI=sqlite:///mlflow.db
+
+(cd backend && alembic upgrade head)
+PYTHONPATH=ml python -m foodsave_ml.bootstrap --seed dataset/raw/train.csv
+PYTHONPATH=ml python -m foodsave_ml.pipeline
+(cd backend && uvicorn app.main:app --reload)
+```
+
+## Pengujian
+
+```bash
+python backend/run_tests.py        # 50 tes: integrasi, keandalan, HDFS, email (PostgreSQL *_test)
+python -m pytest ml/tests          # 5 tes pipeline tanpa database
+```
+
+Tes backend menjalankan pipeline MLflow sungguhan (mode cepat), lalu menguji setiap halaman
+API memakai model hasil pipeline tersebut, termasuk siklus data aktual → HDFS → pelatihan
+ulang → versi model baru dipakai API. Tes keandalan memeriksa: semua endpoint privat menolak
+akses tanpa login, ±1.000 input liar tidak pernah menghasilkan error 500, database mati → 503
+lalu pulih sendiri, HDFS mati → model di memori tetap melayani, dan file model yang diubah
+ditolak lewat checksum.
 
 ## Dataset
 
-[Messy Food Waste Prediction Dataset (Kaggle)](https://www.kaggle.com/competitions/messy-food-waste-prediction-dataset/overview)
-
-| Kolom | Keterangan |
-|---|---|
-| date | Tanggal pengukuran |
-| meals_served | Jumlah porsi (string, format tidak konsisten) |
-| kitchen_staff | Jumlah staf dapur (string, format tidak konsisten) |
-| temperature_C | Suhu (C), ada nilai ekstrem |
-| humidity_percent | Kelembapan (%) |
-| day_of_week | Hari (0 = Senin, 6 = Minggu) |
-| special_event | Acara khusus (1 = Ya, 0 = Tidak) |
-| past_waste_kg | Food waste periode sebelumnya |
-| staff_experience | Pengalaman staf (casing tidak konsisten) |
-| waste_category | Kategori limbah (casing tidak konsisten) |
-| food_waste_kg | **Target** prediksi (kg) |
-
-Letakkan dataset hasil unduhan di `dataset/raw/`.
-
-## Struktur Folder
-
-```
-FoodSave/
-├── dataset/        # raw/ dan processed/
-├── notebooks/      # 01 sampai 07: data dan pemodelan
-├── src/            # logika ML (preprocessing, fitur, prediksi, risiko, what-if)
-├── models/         # best_model/ dan scalers/
-├── results/        # experiment_results.csv, evaluation/, visualizations/
-├── api/            # backend FastAPI
-├── web/            # frontend Next.js (App Router, Tailwind)
-├── requirements.txt
-└── README.md
-```
-
-## Halaman Dashboard
-
-| Menu | Rute | Fungsi |
-|---|---|---|
-| Dashboard | `/` | Prediksi hari ini, status risiko, aktual vs prediksi, insight |
-| Input Data Harian | `/input` | Input manual atau unggah CSV, pratinjau prediksi |
-| Prediksi 7 Hari | `/prediksi` | Prediksi dan risiko 7 hari ke depan |
-| Simulasi Porsi | `/simulasi` | What-if pengurangan porsi dan perubahan jumlah staf |
-| Insight & Penyebab | `/insight` | Faktor penyebab limbah, beban staf, kategori |
-| Laporan | `/laporan` | Ringkasan, temuan, rekomendasi, unduh PDF/Excel |
-
-## Endpoint API
-
-| Method | Endpoint | Fungsi |
-|---|---|---|
-| POST | `/predict` | Prediksi food waste, rentang, status risiko |
-| POST | `/what-if` | Simulasi perubahan porsi dan staf |
-| GET | `/history` | Riwayat dan perbandingan aktual vs prediksi |
-| GET | `/report` | Ringkasan laporan periode tertentu |
-
-Dokumentasi interaktif: `http://localhost:8000/docs`
-
-## Cara Menjalankan
-
-Prasyarat: Python 3.10+, Node.js 18.18+, Git.
-
-**1. Setup Python**
-```bash
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-**2. Jalankan notebook** (berurutan 01 sampai 07)
-```bash
-jupyter notebook
-```
-
-**3. Jalankan backend**
-```bash
-uvicorn api.main:app --reload --port 8000
-```
-
-**4. Jalankan frontend** (terminal lain)
-```bash
-cd web
-npm install
-npm run dev
-```
-Buka http://localhost:3000
-
-File `web/.env.local`:
-```
-NEXT_PUBLIC_API_URL=http://localhost:8000
-```
-
-## Evaluasi
-
-Metrik lengkap tersedia di `results/evaluation/experiment_results.csv`: delapan eksperimen dari empat model dengan dua metode preprocessing, beserta metrik train, validation, dan test, konfigurasi, serta waktu proses. Pemenang dipilih berdasarkan MAE validation.
-
-`results/experiment_results.csv` merupakan template awal yang belum berisi hasil; gunakan file di folder `evaluation` untuk membaca hasil eksperimen yang sudah dijalankan.
-
-## Catatan Validitas
-
-- Pembagian data kronologis (train, validation, test), bukan random split.
-- Imputasi, encoding, scaling, dan penanganan outlier hanya dipelajari dari data training.
-- `waste_category` dan `past_waste_kg` dicek agar tidak menyebabkan data leakage.
-- Hasil what-if adalah estimasi model, bukan bukti sebab-akibat.
-- Batas risiko Aman / Waspada / Tinggi ditentukan dari distribusi data.
-
-## Tools
-
-Python, Pandas, NumPy, Scikit-learn, TensorFlow/Keras, XGBoost, CatBoost, FastAPI, Next.js, React, Tailwind CSS, Recharts, Jupyter/Google Colab.
-
-## Lisensi
-
-Proyek untuk keperluan akademik, Semester 5.
-
-## Tambahan notebook lengkap tanpa menghapus kode tim
-
-Seluruh sel kode asli notebook 03, 05, dan 07 tetap dipertahankan. Bagian baru
-berjudul **Tambahan eksperimen lengkap** berada di bawah sel lama. Jalankan mulai
-dari sel setup bagian tambahan tersebut sampai akhir. Bagian ini menyediakan
-alur seragam agar delapan eksperimen dapat dibandingkan dengan adil. Keluaran
-lama tidak dicampur karena pembagian data dan asumsi fiturnya berbeda. Script
-otomatis melewati sel referensi lama bertag `foodsave-legacy`.
-
-Notebook kosong 01, 02, 04, dan 06 dilengkapi langsung di lokasi yang sama.
-Tidak ada folder notebook baru. Urutan alur tambahan adalah **01 sampai 07**.
-Notebook 08 sengaja dihapus. Untuk memperbarui perbandingan delapan eksperimen,
-jalankan `python -m src.experiment --model evaluate` setelah notebook model selesai.
-Penjelasan ditulis dalam bahasa Indonesia, termasuk tujuan kode, metrik, kurva
-pelatihan, kesalahan terbesar, importance, dan kesimpulan berdasarkan angka aktual.
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python -m ipykernel install --prefix .venv --name foodsave --display-name "Python (FoodSave)"
-python src/execute_notebooks.py
-python src/validate_results.py
-```
-
-Di VS Code pilih interpreter `.venv\Scripts\python.exe`. Dataset `train.csv`
-dan `test.csv` dari ZIP diletakkan di `dataset/raw/`; `submission.csv` tidak
-dipakai sebagai sumber label tambahan. Dataset mentah tetap diabaikan Git.
-
-Untuk eksperimen terminal tanpa menyimpan output notebook:
-
-```powershell
-python -m src.experiment --model all
-python src/validate_results.py
-```
-
-Hasil tambahan berada di folder yang sudah ada:
-
-- `results/evaluation/experiment_results.csv`: seluruh metrik delapan eksperimen.
-- `results/evaluation/*_predictions.csv`: tanggal, aktual, prediksi, dan residual.
-- `results/evaluation/*_curve.csv`: error setiap epoch/tahap/jumlah pohon.
-- `results/evaluation/*_tuning.csv`: dua konfigurasi dan skor validasinya.
-- `results/evaluation/data_audit.json` dan `split_manifest.csv`: audit dan split.
-- `models/best_model/`: artefak baru dengan nama model/preprocessing tersendiri.
-- `models/best_model/selected_model.json`: lokasi relatif model terpilih.
-- `dataset/processed/validated_*.csv`: keluaran preprocessing tambahan.
-- `results/FoodSave_Laporan_Perbandingan_Model.docx`: laporan lokal.
-
-Model lama milik tim tidak ditimpa. Model baru belum otomatis dihubungkan ke API.
-LSTM memerlukan konteks tujuh observasi fitur, bukan satu baris saja. Laporan
-dibuat oleh `src/make_report.py` dengan `python-docx` dari file hasil eksperimen.
-Jalankan kembali evaluasi dan laporan jika eksperimen berubah.
-
-### Metode evaluasi alur tambahan
-
-Tanggal dibagi sekitar 60/20/20 menjadi training, validasi, dan test; tanggal
-yang sama tidak dipisahkan. Duplikat persis tanpa ID dibuang untuk kedua
-preprocessing sebelum split. Median, modus, encoding, batas IQR, dan scaling
-dipelajari dari training saja. Semua model memakai baris evaluasi yang sama
-setelah enam observasi awal menjadi konteks LSTM. Target tidak di-clipping.
-
-Model dipilih dari MAE validasi, dengan RMSE dan latensi validasi sebagai
-pemecah seri. Test hanya untuk evaluasi akhir. Dua konfigurasi dicoba per
-eksperimen, seed 42, tanpa melatih ulang pada validasi. Metrik meliputi MAE,
-RMSE, R², MedAE, bias, WAPE, waktu training, total tuning, dan waktu prediksi.
-
-Fitur operasional target diasumsikan tersedia saat perencanaan. `waste_category`,
-`past_waste_kg`, dan ID tidak digunakan karena asal/waktu ketersediaannya belum
-terverifikasi. Hari dihitung ulang dari tanggal. LSTM menggunakan tujuh
-observasi, bukan tujuh hari; tidak ada ID restoran yang menjamin satu seri.
-Adam pada LSTM menggunakan gradient descent; XGBoost dan CatBoost menggunakan
-gradient boosting; Random Forest tidak menggunakan gradient descent.
-
-Interval dari error validasi bersifat empiris/eksploratif karena validasi juga
-digunakan untuk seleksi. Coverage test dilaporkan apa adanya, bukan dijamin 90%.
-Batas risiko kuantil training belum menjadi batas operasional restoran. Hasil
-satu split/seed tidak membuktikan keunggulan universal atau hubungan sebab-akibat.
-
-`src/build_notebooks.py` adalah pembuat bagian tambahan. Script ini mempertahankan
-sel lama dan mengganti hanya sel tambahan bertanda `foodsave_added`, sehingga
-output tambahan akan kosong kembali. Jangan jalankan untuk sekadar membaca hasil.
-
-Laporan Word/PDF dan gambar hasil eksperimen disimpan lokal dan diabaikan Git.
-Output gambar yang tertanam di notebook dibersihkan untuk menjaga diff tetap ringan.
-Kode visualisasi tetap tersedia sehingga gambar dapat dibuat ulang saat dijalankan.
-
-## Backend PostgreSQL dan Mailpit
-
-Backend menyimpan akun/restoran, pengaturan, input harian, koreksi, riwayat model
-dan prediksi, rencana mingguan, simulasi, impor, tugas, insight, notifikasi,
-laporan, dan antrean email pada PostgreSQL. File upload/laporan menggunakan
-volume terpisah; model dipasang read-only.
-
-```powershell
-python -m api.init_env
-docker-compose up -d --build
-docker-compose ps
-```
-
-- API dan Swagger: http://localhost:8000/docs
-- Readiness API/database/model: http://localhost:8000/health/ready
-- Kotak masuk email pengujian Mailpit: http://localhost:8025
-- PostgreSQL lokal: `localhost:5433`, database `foodsave`
-
-Pengiriman email tahap ini hanya ke Mailpit lokal, bukan internet. Model aktif
-adalah Random Forest Robust; metadata delapan eksperimen disimpan terpisah
-sehingga hasil prediksi dapat ditelusuri ke versinya.
-
-Panduan lengkap tersedia pada [panduan pengujian backend](api/docs/BACKEND_TESTING.md)
-dan [pemeriksaan model](api/docs/MODEL_VALIDATION.md).
-
-Pengujian cepat dari host:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-test.txt
-.\.venv\Scripts\python.exe -m api.test_backend --prepare
-.\.venv\Scripts\python.exe -m api.check_model --database
-.\.venv\Scripts\python.exe -m api.smoke_backend
-```
-
-Tes otomatis menggunakan database `foodsave_test`. Smoke test HTTP membuat
-restoran DEMO tersendiri pada aplikasi. Kredensial `.env` dan hasil tes lokal
-diabaikan Git. Frontend akan dihubungkan pada tahap berikutnya.
+[Messy Food Waste Prediction Dataset (Kaggle)](https://www.kaggle.com/competitions/messy-food-waste-prediction-dataset/overview).
+Hanya `train.csv` (911 baris berlabel) yang dipakai. `test.csv` dari Kaggle berisi baris yang
+sama tanpa kolom target dan `submission.csv` berisi target yang sama, sehingga keduanya tidak
+dipakai sebagai data uji. Data uji diambil dari 20% tanggal terakhir `train.csv`.
