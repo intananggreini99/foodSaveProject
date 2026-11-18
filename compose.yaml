@@ -4,13 +4,14 @@
 # hanya bisa diakses dari laptop ini. Data tersimpan di volume Docker di laptop.
 #
 #   docker compose up -d --build          # semua layanan + pelatihan awal bila belum ada model
+#   http://localhost:8010/docs            # Swagger UI: coba semua fitur lewat API
 #   docker compose stop                   # matikan (data tetap tersimpan)
 #   docker compose run --rm trainer       # pelatihan ulang (pipeline MLflow 6 langkah)
 #   docker compose exec api python -m app.tools.uji_sistem   # uji end-to-end sistem
 #
 # Port host sengaja berbeda dari project lain di laptop yang sama:
 #   SatisView  : 3000, 5433, 8080, 9870      CampusFlow : 8081, 8088
-#   FoodSave   : web 3010 · API 8010 · PostgreSQL 5434 · MLflow 5010 · HDFS 9871 · Mailpit 8026
+#   FoodSave   : API 8010 (Swagger UI /docs) · PostgreSQL 5434 · MLflow 5010 · HDFS 9871 · Mailpit 8026
 # Semua port bisa diubah lewat .env (variabel FOODSAVE_*_PORT).
 name: foodsave
 
@@ -28,7 +29,7 @@ x-hdfs-env: &hdfs-env
 
 x-api-env: &api-env
   <<: [*db-env, *hdfs-env]
-  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3010,http://127.0.0.1:3010}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8010,http://127.0.0.1:8010}
   REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
   SESSION_DAYS: ${SESSION_DAYS:-7}
   APP_STORAGE_PATH: /app/storage
@@ -252,29 +253,6 @@ services:
     depends_on:
       api:
         condition: service_healthy
-
-  # --- Frontend web (Next.js) -------------------------------------------------------
-  web:
-    image: foodsave-web:local
-    build:
-      context: ./web
-      args:
-        NEXT_PUBLIC_API_URL: http://localhost:${FOODSAVE_API_PORT:-8010}
-        NEXT_PUBLIC_MLFLOW_URL: http://localhost:${FOODSAVE_MLFLOW_PORT:-5010}
-        NEXT_PUBLIC_HDFS_URL: http://localhost:${FOODSAVE_HDFS_UI_PORT:-9871}
-        NEXT_PUBLIC_MAILPIT_URL: http://localhost:${FOODSAVE_MAILPIT_PORT:-8026}
-    pull_policy: build
-    restart: on-failure:5
-    environment:
-      TZ: Asia/Jakarta
-    ports:
-      - "127.0.0.1:${FOODSAVE_WEB_PORT:-3010}:3000"
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 15s
-      timeout: 5s
-      start_period: 20s
-      retries: 5
 
   mailpit:
     image: axllent/mailpit:v1.27.4

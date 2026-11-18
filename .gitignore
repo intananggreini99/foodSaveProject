@@ -19,11 +19,6 @@ mlflow.db
 dataset/raw/*
 !dataset/raw/train.csv
 
-# Next.js
-web/node_modules/
-web/.next/
-web/.env.local
-
 # Hasil riset lama yang besar
 research/results/**/*.docx
 research/results/**/*.pdf

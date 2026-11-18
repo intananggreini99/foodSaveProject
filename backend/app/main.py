@@ -21,6 +21,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 from sqlalchemy.orm.exc import StaleDataError
 
+from app import openapi_docs
 from app.core import database
 from app.core.config import BACKEND_ROOT, get_settings
 from app.routers import (
@@ -61,10 +62,8 @@ async def lifespan(app):
 app = FastAPI(
     title="FoodSave Backend",
     version="2.0.0",
-    description=(
-        "Prediksi limbah makanan restoran. PostgreSQL (operational, prediction, "
-        "model_analysis), model Random Forest dari pipeline MLflow yang disimpan di HDFS."
-    ),
+    description=openapi_docs.DESCRIPTION,
+    swagger_ui_parameters=openapi_docs.SWAGGER_UI,
     lifespan=lifespan,
 )
 app.add_middleware(
@@ -171,3 +170,5 @@ for router in [
     training_exports.router,
 ]:
     app.include_router(router, prefix="/api/v1")
+
+openapi_docs.install(app)

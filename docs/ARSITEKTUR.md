@@ -6,7 +6,7 @@ Dokumen ini memetakan diagram *Arsitektur Sistem FoodSave* ke kode dan layanan D
 
 | Komponen di diagram | Layanan Compose | Kode |
 |---|---|---|
-| Pengguna → frontend web (Next.js) | (web/, dijalankan terpisah) | `web/` |
+| Pengguna → Swagger UI FastAPI (`/docs`); frontend belum dipasang | `api` | `backend/app/openapi_docs.py` (kelompok dan judul endpoint), contoh body di `backend/app/schemas.py` |
 | FastAPI: API /api/v1 | `api` | `backend/app/routers/` |
 | FastAPI: layanan prediksi (model .pkl di memori) | `api` | `backend/app/services/prediction_service.py` |
 | FastAPI: pekerja laporan (PDF, XLSX, email) | `api` (buat file), `report-worker` (email) | `backend/app/services/report_files.py`, `backend/app/workers/report_worker.py` |
@@ -78,9 +78,12 @@ tetap berlaku, misalnya: kunci `daily_operations` → simpan `prediction_results
 `notifications` dalam satu commit. Hanya boleh ada satu baris `model_versions.is_active`
 (indeks unik parsial).
 
-## 5. Halaman → jenis data → endpoint
+## 5. Fitur → jenis data → endpoint
 
-| Halaman | Jenis | Endpoint utama |
+Di Swagger UI (`/docs`) endpoint dikelompokkan dengan nama fitur yang sama dan bernomor
+sesuai urutan mencoba. Kolom "Fitur" memakai nama halaman frontend yang direncanakan.
+
+| Fitur | Jenis | Endpoint utama |
 |---|---|---|
 | Masuk / Daftar | operasional | `/auth/register`, `/auth/login`, `/auth/me` |
 | Dashboard | operasional (prediksi tersimpan) | `GET /dashboard?on=`, `GET /dashboard/trend` |

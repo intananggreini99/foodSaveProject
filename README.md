@@ -6,7 +6,7 @@ Random Forest yang dilatih ulang lewat pipeline MLflow dan disajikan oleh FastAP
 ## Arsitektur
 
 ```
-Pengguna ─▶ Frontend web (Next.js) ◀─REST─▶ FastAPI ◀──▶ PostgreSQL "foodsave"
+Pengguna ─▶ Swagger UI (/docs) ◀──REST──▶ FastAPI ◀──▶ PostgreSQL "foodsave"
                                              │  API /api/v1       ├─ operational
                                              │  pekerja laporan    ├─ prediction
                                              │  layanan prediksi   └─ model_analysis
@@ -30,15 +30,15 @@ Penjelasan lengkap per komponen, aliran data, tabel, dan endpoint ada di
 ├── shared/               paket foodsave_core: preprocessing + akses HDFS (dipakai backend & ml)
 ├── infra/                konfigurasi Hadoop (bde2020) dan image MLflow
 ├── dataset/raw/train.csv data mentah awal (diunggah ke HDFS saat start)
-├── docs/                 dokumentasi arsitektur
-├── research/             arsip riset lama (notebook, perbandingan 4 model); tidak dipakai runtime
-└── web/                  frontend Next.js (halaman status lokal + kerangka halaman fitur)
+├── docs/                 dokumentasi arsitektur, contoh/daily_operations.csv untuk uji unggah
+└── research/             arsip riset lama (notebook, perbandingan 4 model); tidak dipakai runtime
 ```
 
 ## Rilis lokal di laptop (localhost)
 
 Proyek ini dirilis untuk dipakai di laptop sendiri, bukan untuk deploy ke server atau
-internet. Semua port hanya terbuka di `127.0.0.1`, sehingga perangkat lain di jaringan
+internet. Belum ada frontend: semua fitur dicoba lewat Swagger UI FastAPI di
+http://localhost:8010/docs. Semua port hanya terbuka di `127.0.0.1`, sehingga perangkat lain di jaringan
 Wi-Fi yang sama pun tidak bisa mengaksesnya. Yang dibutuhkan hanya Docker Desktop.
 
 Semua perintah di bawah diketik satu per satu di PowerShell. Tunggu satu perintah selesai
@@ -57,7 +57,7 @@ Di Notepad, ganti nilai `POSTGRES_PASSWORD` (huruf dan angka saja), simpan, lalu
 ### Langkah 2: cek port tidak bentrok
 
 ```powershell
-Get-NetTCPConnection -State Listen -LocalPort 3010,8010,5434,5010,9871,8026 -ErrorAction SilentlyContinue
+Get-NetTCPConnection -State Listen -LocalPort 8010,5434,5010,9871,8026 -ErrorAction SilentlyContinue
 ```
 
 Tidak ada keluaran berarti semua port bebas. Bila muncul baris, lihat container mana yang
@@ -68,7 +68,7 @@ docker ps --format "{{.Names}}  {{.Ports}}"
 ```
 
 Lalu ganti port yang bentrok di `.env` (variabel `FOODSAVE_*_PORT`; bila mengganti
-`FOODSAVE_WEB_PORT`, sesuaikan juga `CORS_ORIGINS`) dan cek lagi dengan nomor port baru.
+`FOODSAVE_API_PORT`, sesuaikan juga `CORS_ORIGINS`) dan cek lagi dengan nomor port baru.
 Bila FoodSave sedang menyala, port-port tersebut memang dipakai Docker (proses
 `com.docker.backend` atau `wslrelay`); itu normal.
 
@@ -103,11 +103,13 @@ curl.exe -s http://localhost:8010/health/ready
 Sistem siap bila hasilnya memuat `"status":"ready"`. Pakai `curl.exe`, bukan `curl`, karena
 di Windows PowerShell `curl` adalah nama lain `Invoke-WebRequest`.
 
-### Langkah 5: buka aplikasi
+### Langkah 5: buka Swagger UI
 
 ```powershell
-Start-Process http://localhost:3010
+Start-Process http://localhost:8010/docs
 ```
+
+Lanjutkan dengan panduan [Mencoba fitur lewat Swagger UI](#mencoba-fitur-lewat-swagger-ui).
 
 ### Pemakaian sehari-hari
 
@@ -277,7 +279,6 @@ Port host dibuat berbeda dari project lain di laptop yang sama (SatisView memaka
 | HDFS (namenode) | http://localhost:9871 |
 | Mailpit | http://localhost:8026 |
 | PostgreSQL | localhost:5434 |
-| Frontend web | http://localhost:3010 |
 
 Image Hadoop sama dengan project SatisView (`bde2020/hadoop-*:2.0.0-hadoop3.2.1-java8`),
 jadi tidak perlu diunduh ulang bila SatisView sudah pernah dijalankan. Kedua project memakai
@@ -299,19 +300,37 @@ docker compose run --rm trainer python -m foodsave_ml.pipeline --no-activate   #
 
 FastAPI memuat versi baru otomatis pada permintaan prediksi berikutnya.
 
-### Frontend web
+### Mencoba fitur lewat Swagger UI
 
-Layanan `web` di compose membangun dan menjalankan Next.js di container Linux. Ini cara yang
-disarankan di Windows: kebijakan Smart App Control/WDAC bisa memblokir biner native Next.js
-(`next-swc.win32-x64-msvc.node`) bila dijalankan langsung dengan `npm run dev`.
+Buka http://localhost:8010/docs. Endpoint dikelompokkan per fitur dan diberi nomor sesuai
+urutan mencoba. Setiap form sudah berisi body contoh yang valid; cukup klik **Execute**,
+lalu lihat **Response body** dan kodenya. Ganti nilai `id` dengan nilai dari respons
+sebelumnya bila diminta. Login memakai cookie, jadi tidak ada tombol Authorize.
 
-```powershell
-docker compose up -d --build web      # hanya membangun ulang dan menjalankan frontend
-docker compose logs -f web
-```
+| Kelompok | Yang dicoba | Yang perlu diisi |
+|---|---|---|
+| 1. Akun dan login | *Daftar akun pemilik dan restoran baru*, lalu *Lihat akun yang sedang login* | Email dan password sendiri (password minimal 10 karakter) |
+| 2. Pengaturan restoran | *Ubah harga bahan, batas risiko, dan kapasitas* | Body contoh bisa langsung dipakai |
+| 3. Input Data Harian | *Pratinjau prediksi* → *Simpan input harian* (salin `id` dan `version`) → *Jalankan dan simpan prediksi* → *Koreksi input harian* | `operation_id` = `id` input; `expected_version` = `version` terakhir |
+| 4. Unggah CSV/Excel | *Unggah CSV/Excel* dua kali: `apply=false` (periksa) lalu `apply=true` (simpan) | Pilih file `docs\contoh\daily_operations.csv` |
+| 5. Dashboard | *Ringkasan satu tanggal* dan *Aktual vs prediksi* | `on` / `end` = tanggal input, mis. `2026-11-19` |
+| 6. Prediksi 7 Hari | *Buat rencana 7 hari* → *Ubah satu hari lalu prediksi ulang* → *Riwayat revisi* | `plan_id` dan `day_id` dari respons rencana; body ubah hari berisi tanggal hari ke-6 (`2026-11-28`) |
+| 7. Simulasi Porsi | *Bandingkan pengurangan 0/5/10/15%* → *Simpan skenario* → *Terapkan skenario* | `daily_operation_id` = `id` input; `scenario_id` dari respons simpan; `expected_operation_version` = `version` input saat ini |
+| 8. Insight & Penyebab | Faktor berpengaruh, kepekaan porsi, evaluasi model, beban staf per kategori | `starts_on` / `ends_on` untuk insight operasional |
+| 9. Laporan | *Ringkasan limbah aktual* → *Buat file laporan* → *Unduh file laporan* | `export_id` dari respons; email masuk Mailpit http://localhost:8026 |
+| 10. Notifikasi | *Daftar notifikasi saya* (muncul bila ada prediksi Tinggi) | — |
+| 11. Model dan pelatihan ulang | *Model aktif*, *Ekspor data aktual ke HDFS sekarang* | — |
 
-Menjalankan langsung di Windows (`cd web; npm install; npm run dev`) hanya berhasil bila
-Windows tidak memblokir file `.node` tersebut.
+Kode respons: 200/201 berhasil, 401 belum login, 403 butuh peran pemilik/manager,
+404 `id` salah, 409 data bentrok (mis. tanggal sudah ada atau `version` sudah berubah),
+422 isian tidak valid (lihat `detail` untuk kolom yang salah).
+
+Body contoh memakai tanggal 19 November 2026 untuk input harian dan 23–29 November 2026
+untuk rencana 7 hari. Menyimpan input dengan tanggal yang sama dua kali sengaja ditolak (409);
+ganti `operation_date` untuk input berikutnya.
+
+Swagger UI mengirim POST/PUT dari alamat http://localhost:8010, jadi alamat itu harus ada di
+`CORS_ORIGINS` pada `.env` (bawaan `.env.example` sudah benar).
 
 ### Bila ada masalah
 
@@ -321,8 +340,10 @@ Windows tidak memblokir file `.node` tersebut.
 | `pull access denied for foodsave-...` | Compose versi lama. Pastikan memakai `compose.yaml` terbaru (setiap image lokal punya `build` dan `pull_policy: build`). |
 | `hdfs-init` lama menunggu | Lihat `docker compose logs hdfs-init namenode datanode`. Pesan "Menunggu HDFS siap" normal selama datanode belum terdaftar (biasanya < 1 menit). |
 | `/health/ready` 503 "Belum ada model aktif" | Pelatihan awal belum selesai. Pantau `docker compose logs -f trainer-init`. |
-| `An Application Control policy has blocked this file ... next-swc` saat `npm run dev` | Windows memblokir biner Next.js. Jalankan frontend lewat Docker: `docker compose up -d --build web`. |
-| `'next' is not recognized` | Jalankan `npm install` di folder `web` sebelum `npm run dev` (atau pakai layanan `web` di Docker). |
+| Swagger tidak terbuka / `ERR_CONNECTION_REFUSED` | API belum menyala atau masih pelatihan awal. Cek `docker compose ps` dan `curl.exe -s http://localhost:8010/health/ready`. |
+| 403 "Origin permintaan tidak diizinkan" saat Execute | `CORS_ORIGINS` di `.env` belum memuat alamat Swagger. Isi `CORS_ORIGINS=http://localhost:8010,http://127.0.0.1:8010`, lalu `docker compose up -d`. |
+| 401 "Silakan login terlebih dahulu" | Jalankan *Daftar akun* atau *Masuk* di kelompok 1 dulu, di tab browser yang sama. |
+| Halaman http://localhost:8010/docs kosong | Swagger UI mengambil tampilan dari internet (cdn.jsdelivr.net). Sambungkan laptop ke internet. |
 | Port masih bentrok setelah ganti `.env` | Hentikan dulu: `docker compose down`, lalu `docker compose up -d`. |
 
 Laptop yang menjalankan SatisView, CampusFlow, dan FoodSave bersamaan butuh RAM besar (dua
@@ -348,7 +369,7 @@ PYTHONPATH=ml python -m foodsave_ml.pipeline
 ## Pengujian
 
 ```bash
-python backend/run_tests.py        # 50 tes: integrasi, keandalan, HDFS, email (PostgreSQL *_test)
+python backend/run_tests.py        # 52 tes: integrasi, keandalan, HDFS, email, Swagger (PostgreSQL *_test)
 python -m pytest ml/tests          # 5 tes pipeline tanpa database
 ```
 

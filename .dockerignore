@@ -6,7 +6,6 @@
 venv
 storage
 research
-web
 docs
 **/mlruns
 **/mlflow.db

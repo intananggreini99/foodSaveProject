@@ -1,6 +1,0 @@
-# node_modules dari Windows berisi biner Windows; container memasang ulang versi Linux.
-node_modules
-.next
-.env*
-npm-debug.log*
-Dockerfile
