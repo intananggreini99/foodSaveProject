@@ -1,0 +1,6 @@
+# Skrip dan konfigurasi yang dibaca container Linux harus berakhiran LF (bukan CRLF Windows).
+*.sh text eol=lf
+*.env text eol=lf
+*.yaml text eol=lf
+*.py text eol=lf
+Dockerfile text eol=lf

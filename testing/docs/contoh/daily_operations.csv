@@ -1,0 +1,9 @@
+operation_date,meals_prepared,kitchen_staff,staff_experience,special_event,event_type,temperature_c,humidity_percent,previous_waste_kg,waste_category,actual_waste_kg,manager_notes
+2026-11-11,380,12,Menengah,false,,27,66,21,vegetables,24.5,Contoh data valid
+2026-11-12,410,12,Menengah,false,,28,64,24.5,grains,29.1,Contoh data valid
+2026-11-13,350,10,Ahli,true,Ulang tahun,29,70,29.1,meat,31.8,Contoh acara khusus
+2026-11-14,520,13,Menengah,true,Katering kantor,30,72,31.8,meat,44.2,Contoh hari ramai
+2026-11-15,600,14,Pemula,false,,31,75,44.2,vegetables,52.7,Contoh porsi besar
+2026-11-16,300,9,Ahli,false,,27,60,52.7,dairy,18.3,Contoh hari sepi
+2026-11-17,420,12,Menengah,false,,28,65,18.3,grains,30.4,Contoh data valid
+2026-11-18,200,0,Pemula,false,,28,65,10,meat,,Baris sengaja tidak valid karena staf nol

@@ -1,0 +1,34 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Rahasia dan penyimpanan lokal
+.env
+.env.*
+!.env.example
+storage/
+backup/
+mlruns/
+mlflow.db
+
+# Dataset mentah: hanya train.csv (seed HDFS) yang disertakan
+dataset/raw/*
+!dataset/raw/train.csv
+
+# Hasil riset lama yang besar
+research/results/**/*.docx
+research/results/**/*.pdf
+research/results/**/*.png
+research/results/**/*.jpg
+research/results/**/*.jpeg
+research/results/**/*.svg
+research/results/**/*.webp
+
+# Sistem
+.DS_Store
+Thumbs.db
+.vscode/

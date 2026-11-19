@@ -1,0 +1,54 @@
+{
+  "reference_commit": "06eb640b8183ba855ed67a712ad25d87cfaacf5c",
+  "status": "passed",
+  "checks": [
+    {
+      "notebook": "notebooks/01_data_understanding.ipynb",
+      "original_cells_unchanged": 0,
+      "added_cells": 17,
+      "syntax": "passed"
+    },
+    {
+      "notebook": "notebooks/02_eda.ipynb",
+      "original_cells_unchanged": 0,
+      "added_cells": 19,
+      "syntax": "passed"
+    },
+    {
+      "notebook": "notebooks/03_Standard_Robust_Preprocessing.ipynb",
+      "original_cells_unchanged": 6,
+      "added_cells": 12,
+      "syntax": "passed"
+    },
+    {
+      "notebook": "notebooks/04_lstm_model.ipynb",
+      "original_cells_unchanged": 0,
+      "added_cells": 29,
+      "syntax": "passed"
+    },
+    {
+      "notebook": "notebooks/05_random_forest_model.ipynb",
+      "original_cells_unchanged": 13,
+      "added_cells": 29,
+      "syntax": "passed"
+    },
+    {
+      "notebook": "notebooks/06_xgboost_model.ipynb",
+      "original_cells_unchanged": 0,
+      "added_cells": 27,
+      "syntax": "passed"
+    },
+    {
+      "notebook": "notebooks/07_catboost_model.ipynb",
+      "original_cells_unchanged": 5,
+      "added_cells": 29,
+      "syntax": "passed"
+    },
+    {
+      "notebook": "notebooks/08_model_evaluation.ipynb",
+      "original_cells_unchanged": 0,
+      "added_cells": 22,
+      "syntax": "passed"
+    }
+  ]
+}

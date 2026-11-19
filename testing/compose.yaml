@@ -1,0 +1,282 @@
+# Arsitektur Sistem FoodSave dengan Docker Compose - RILIS LOKAL (localhost) di laptop.
+#
+# Tidak untuk deploy ke server/internet: semua port hanya terbuka di 127.0.0.1, sehingga
+# hanya bisa diakses dari laptop ini. Data tersimpan di volume Docker di laptop.
+#
+#   docker compose up -d --build          # semua layanan + pelatihan awal bila belum ada model
+#   http://localhost:8010/docs            # Swagger UI: coba semua fitur lewat API
+#   docker compose stop                   # matikan (data tetap tersimpan)
+#   docker compose run --rm trainer       # pelatihan ulang (pipeline MLflow 6 langkah)
+#   docker compose exec api python -m app.tools.uji_sistem   # uji end-to-end sistem
+#
+# Port host sengaja berbeda dari project lain di laptop yang sama:
+#   SatisView  : 3000, 5433, 8080, 9870      CampusFlow : 8081, 8088
+#   FoodSave   : API 8010 (Swagger UI /docs) · PostgreSQL 5434 · MLflow 5010 · HDFS 9871 · Mailpit 8026
+# Semua port bisa diubah lewat .env (variabel FOODSAVE_*_PORT).
+name: foodsave
+
+x-db-env: &db-env
+  DATABASE_HOST: postgres
+  DATABASE_PORT: 5432
+  POSTGRES_DB: ${POSTGRES_DB:-foodsave}
+  POSTGRES_USER: ${POSTGRES_USER:-foodsave}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Isi POSTGRES_PASSWORD di .env}
+
+x-hdfs-env: &hdfs-env
+  FOODSAVE_STORAGE: hdfs
+  HDFS_NAMENODE_URL: http://namenode:9870
+  HDFS_USER: root
+
+x-api-env: &api-env
+  <<: [*db-env, *hdfs-env]
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8010,http://127.0.0.1:8010}
+  REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
+  LOGIN_REQUIRED: ${LOGIN_REQUIRED:-false}
+  DOCS_SHOW_ALL: ${DOCS_SHOW_ALL:-false}
+  SESSION_DAYS: ${SESSION_DAYS:-7}
+  APP_STORAGE_PATH: /app/storage
+  MAIL_BACKEND: mailpit
+  SMTP_HOST: mailpit
+  SMTP_PORT: 1025
+  SMTP_FROM: ${SMTP_FROM:-foodsave@example.test}
+  TRAINING_EXPORT_INTERVAL_HOURS: ${TRAINING_EXPORT_INTERVAL_HOURS:-24}
+  TZ: Asia/Jakarta
+
+x-ml-env: &ml-env
+  <<: [*db-env, *hdfs-env]
+  MLFLOW_TRACKING_URI: http://mlflow:5000
+  MLFLOW_EXPERIMENT: foodsave-random-forest
+  MLFLOW_REGISTERED_MODEL: foodsave-rf
+  TEST_FRACTION: ${TEST_FRACTION:-0.2}
+  CV_FOLDS: ${CV_FOLDS:-5}
+  N_ESTIMATORS: ${N_ESTIMATORS:-200}
+  N_JOBS: ${N_JOBS:-2}
+  TZ: Asia/Jakarta
+
+# Image lokal dibangun dari source, tidak pernah diunduh dari Docker Hub.
+x-backend-image: &backend-image
+  image: foodsave-backend:local
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+  pull_policy: build
+
+x-ml-image: &ml-image
+  image: foodsave-ml:local
+  build:
+    context: .
+    dockerfile: ml/Dockerfile
+  pull_policy: build
+
+services:
+  # --- PostgreSQL: database foodsave (3 skema) + database mlflow (tracking) ---------
+  postgres:
+    image: postgres:16
+    restart: on-failure:5
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-foodsave}
+      POSTGRES_USER: ${POSTGRES_USER:-foodsave}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Isi POSTGRES_PASSWORD di .env}
+      TZ: Asia/Jakarta
+    ports:
+      - "127.0.0.1:${FOODSAVE_POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Membuat database "mlflow" (bila belum ada) lalu migrasi 3 skema. Aman diulang.
+  migrate:
+    <<: *backend-image
+    environment: *api-env
+    command: ["sh", "-c", "python -m app.tools.ensure_databases && python -m alembic upgrade head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # --- Apache Hadoop HDFS (image yang sama dengan project SatisView) ---------------
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    platform: linux/amd64
+    hostname: namenode
+    restart: on-failure:5
+    environment:
+      CLUSTER_NAME: foodsave
+    env_file: ./infra/hadoop/hadoop.env
+    ports:
+      - "127.0.0.1:${FOODSAVE_HDFS_UI_PORT:-9871}:9870"
+    volumes:
+      - hdfs_namenode:/hadoop/dfs/name
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9870/ >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    platform: linux/amd64
+    hostname: datanode
+    restart: on-failure:5
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+    env_file: ./infra/hadoop/hadoop.env
+    volumes:
+      - hdfs_datanode:/hadoop/dfs/data
+    depends_on:
+      namenode:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9864/ >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  # Menunggu datanode terdaftar dan safemode mati, lalu unggah train.csv (sekali).
+  hdfs-init:
+    <<: *ml-image
+    environment: *ml-env
+    command: ["python", "-m", "foodsave_ml.bootstrap"]
+    depends_on:
+      namenode:
+        condition: service_healthy
+      datanode:
+        condition: service_healthy
+    restart: "no"
+
+  # --- MLflow: tracking server + Model Registry -------------------------------------
+  mlflow:
+    image: foodsave-mlflow:local
+    build:
+      context: ./infra/mlflow
+    pull_policy: build
+    restart: on-failure:5
+    command:
+      - sh
+      - -c
+      - >-
+        mlflow server --host 0.0.0.0 --port 5000 --workers 2
+        --backend-store-uri "postgresql+psycopg://$${POSTGRES_USER}:$${POSTGRES_PASSWORD}@postgres:5432/mlflow"
+        --artifacts-destination /mlflow/artifacts --serve-artifacts
+        --allowed-hosts "mlflow,mlflow:5000,localhost,localhost:*,127.0.0.1,127.0.0.1:*"
+    environment: *db-env
+    ports:
+      - "127.0.0.1:${FOODSAVE_MLFLOW_PORT:-5010}:5000"
+    volumes:
+      - mlflow_artifacts:/mlflow/artifacts
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=4)"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  # Pelatihan awal otomatis: hanya berjalan bila belum ada model aktif.
+  trainer-init:
+    <<: *ml-image
+    environment: *ml-env
+    command: ["python", "-m", "foodsave_ml.pipeline", "--if-no-active"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      hdfs-init:
+        condition: service_completed_successfully
+      mlflow:
+        condition: service_healthy
+    restart: "no"
+
+  # Pelatihan ulang manual/terjadwal: docker compose run --rm trainer
+  trainer:
+    <<: *ml-image
+    profiles: ["training"]
+    environment: *ml-env
+    command: ["python", "-m", "foodsave_ml.pipeline"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      hdfs-init:
+        condition: service_completed_successfully
+      mlflow:
+        condition: service_healthy
+
+  # --- FastAPI: API /api/v1 + layanan prediksi (model di memori) ---------------------
+  api:
+    <<: *backend-image
+    restart: on-failure:5
+    environment:
+      <<: *api-env
+      # Jumlah proses uvicorn (tiap proses memuat model sendiri, ±10 MB).
+      WEB_CONCURRENCY: ${FOODSAVE_API_WORKERS:-2}
+    ports:
+      - "127.0.0.1:${FOODSAVE_API_PORT:-8010}:8000"
+    volumes:
+      - app_storage:/app/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      hdfs-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live', timeout=4)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  # Pekerja laporan: kirim email laporan PDF/XLSX dari antrean (Mailpit lokal).
+  report-worker:
+    <<: *backend-image
+    restart: on-failure:5
+    environment: *api-env
+    command: ["python", "-m", "app.workers.report_worker"]
+    volumes:
+      - app_storage:/app/storage:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+
+  # Aliran balik data: limbah aktual -> HDFS /foodsave/raw/actuals (default tiap 24 jam).
+  exporter:
+    <<: *backend-image
+    restart: on-failure:5
+    environment: *api-env
+    command: ["python", "-m", "app.workers.training_export"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  mailpit:
+    image: axllent/mailpit:v1.27.4
+    restart: on-failure:5
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      MP_MAX_MESSAGES: 5000
+      TZ: Asia/Jakarta
+    volumes:
+      - mailpit_data:/data
+    ports:
+      - "127.0.0.1:${FOODSAVE_MAILPIT_PORT:-8026}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres_data:
+  hdfs_namenode:
+  hdfs_datanode:
+  mlflow_artifacts:
+  app_storage:
+  mailpit_data:

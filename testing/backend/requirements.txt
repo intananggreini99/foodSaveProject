@@ -1,0 +1,16 @@
+# FastAPI: API /api/v1, layanan prediksi, pekerja laporan, ekspor data aktual.
+fastapi==0.163.1
+uvicorn==0.34.3
+sqlalchemy==2.0.57
+alembic==1.20.1
+psycopg[binary]==3.3.8
+pydantic-settings==2.16.2
+python-multipart==0.0.33
+httpx==0.28.1
+openpyxl==3.1.5
+reportlab==4.4.1
+# Wajib sama dengan ml/requirements.txt agar file .pkl dari MLflow bisa dibuka.
+numpy==2.5.4
+pandas==3.1.1
+scikit-learn==1.9.1
+joblib==1.6.0

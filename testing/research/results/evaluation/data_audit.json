@@ -1,0 +1,44 @@
+{
+  "source_sha256": "c2bedb198bf40cc6793921cdfe0573589923996b3347b3361561b114214b9adf",
+  "raw_rows": 911,
+  "invalid_date_or_target_removed": 0,
+  "exact_duplicates_removed_for_all_models": 0,
+  "usable_rows": 911,
+  "missing_before": {
+    "ID": 0,
+    "date": 0,
+    "meals_served": 0,
+    "kitchen_staff": 0,
+    "temperature_C": 0,
+    "humidity_percent": 0,
+    "day_of_week": 0,
+    "special_event": 0,
+    "past_waste_kg": 0,
+    "staff_experience": 164,
+    "waste_category": 0,
+    "food_waste_kg": 0
+  },
+  "excluded_features": [
+    "ID",
+    "waste_category",
+    "past_waste_kg"
+  ],
+  "sequence_warning": "7 observasi, bukan 7 hari. Tidak ada ID restoran; urutan temporal tidak membuktikan satu seri restoran.",
+  "split": {
+    "test": {
+      "n": 174,
+      "start": "2024-03-11",
+      "end": "2024-09-26"
+    },
+    "train": {
+      "n": 564,
+      "start": "2022-01-01",
+      "end": "2023-08-23"
+    },
+    "validation": {
+      "n": 173,
+      "start": "2023-08-24",
+      "end": "2024-03-10"
+    }
+  }
+}
