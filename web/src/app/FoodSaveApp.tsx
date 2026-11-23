@@ -187,6 +187,31 @@ function AnalysisPage({ page, openDetail, applyPlan }: { page: string; openDetai
       })
       .catch(() => undefined)
   }, [])
+
+  useEffect(() => {
+    const actions: Record<string, string> = {
+      'Lihat perbaikan': '12 data tidak wajar sudah ditandai untuk ditinjau sebelum dikirim ke backend.',
+      'Lihat saran': 'Tinjau perubahan porsi dan staf pada simulasi untuk memilih rencana yang paling aman.',
+      'Terapkan saran': 'Saran operasional ditandai sebagai rencana yang perlu diterapkan pada hari ini.',
+    }
+    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('button'))
+      .filter((button) => actions[button.textContent?.trim() ?? ''])
+    const listeners = buttons.map((button) => {
+      const listener = () => {
+        const title = button.textContent?.trim() ?? 'Detail'
+        openDetail(title, actions[title])
+      }
+      button.addEventListener('click', listener)
+      return { button, listener }
+    })
+    return () => listeners.forEach(({ button, listener }) => button.removeEventListener('click', listener))
+  }, [page, openDetail])
+
+  useEffect(() => {
+    const unavailableLabels = Array.from(document.querySelectorAll<HTMLElement>('.calendar-cell > div:last-child > span:last-child'))
+      .filter((label) => label.textContent?.includes('tidak tersedia'))
+    unavailableLabels.forEach((label) => label.remove())
+  }, [calendarData])
   const predicted = Math.max(4, portions * 0.026).toFixed(1)
 
   if (page === 'Input Data Harian') return <div className="page-enter">
@@ -221,7 +246,7 @@ function AnalysisPage({ page, openDetail, applyPlan }: { page: string; openDetai
     })
     const day = days[selectedDay]
     return <div className="page-enter">
-      <div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-2xl font-bold sm:text-[30px]">Rabu & Sabtu berisiko Tinggi</h1><p className="mt-1 text-sm text-slate-500">Potensi hemat minggu ini <strong className="text-emerald-700">Rp320.000</strong>.</p></div><button onClick={()=>openDetail('Rencana siap diekspor','Rencana 7 hari berisi porsi, staf, dan peringatan risiko telah disiapkan sebagai PDF.')} className="rounded-xl bg-[#173d32] px-4 py-3 text-xs font-semibold text-white">Ekspor Rencana PDF</button></div>
+      <div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-2xl font-bold sm:text-[30px]">Rabu & Sabtu berisiko Tinggi</h1><p className="mt-1 text-sm text-slate-500">Potensi hemat minggu ini <strong className="text-emerald-700">Rp320.000</strong>.</p></div><button onClick={()=>window.print()} className="rounded-xl bg-[#173d32] px-4 py-3 text-xs font-semibold text-white">Ekspor Rencana PDF</button></div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">{days.map((d,i)=><button key={d[0]} onClick={()=>setSelectedDay(i)} className={`rounded-2xl border p-4 text-left transition ${i===selectedDay?'ring-2 ring-[#173d32]': ''} ${d[3]==='Tinggi'?'border-red-200 bg-red-50':d[3]==='Aman'?'border-emerald-200 bg-emerald-50':'border-amber-200 bg-amber-50'}`}><p className="text-xs text-slate-500">{d[0]} · {d[1]}</p><strong className="mt-3 block text-2xl">{d[2]} kg</strong><span className={`mt-2 inline-block rounded-full px-2 py-1 text-[10px] font-bold ${d[3]==='Tinggi'?'bg-red-100 text-red-700':d[3]==='Aman'?'bg-emerald-100 text-emerald-700':'bg-amber-100 text-amber-700'}`}>{d[3]}</span><p className="mt-3 text-[10px] text-slate-500">Saran {d[4]} porsi<br/>{d[5]} porsi/staf</p></button>)}</div>
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_.6fr]"><article className="card"><h2 className="section-title">Limbah 7 Hari Mendatang</h2><div className="mt-6 flex h-64 items-end gap-3 border-b border-slate-200">{days.map((d,i)=><div className="flex h-full flex-1 flex-col items-center justify-end gap-2" key={d[0]}><span className="text-xs font-bold">{d[2]}</span><div className={`chart-bar w-full max-w-14 rounded-t-lg ${d[2]>15?'bg-red-400':d[2]>=10?'bg-amber-400':'bg-emerald-500'}`} style={{height:`${d[2]*9}px`}}/><span className="text-[10px] text-slate-400">{d[0]}</span></div>)}</div><div className="mt-4 flex flex-wrap gap-4 text-[10px] text-slate-500"><span>Hijau: Aman &lt;10 kg</span><span>Kuning: Waspada 10–15 kg</span><span>Merah: Tinggi &gt;15 kg</span></div></article>
       <article className="card"><h2 className="section-title">Ubah rencana {day[0]}</h2><p className="section-subtitle">Hasil berubah saat input disesuaikan</p><div className="mt-5 space-y-4"><Field label="Porsi" value={String(day[4])}/><Field label="Staf" value={String(Math.round(day[4]/day[5]))}/><Field label="Suhu" value="30°C"/><label className="flex items-center justify-between rounded-xl bg-slate-50 p-3 text-xs font-semibold">Acara khusus<input type="checkbox" defaultChecked={day[0]==='Rab'||day[0]==='Sab'} className="accent-emerald-700"/></label></div><button onClick={()=>openDetail('Rencana hari diperbarui',`${day[0]}, ${day[1]} kini memakai rencana ${day[4]} porsi. Tim dapur akan menerima pembaruan.`)} className="mt-5 w-full rounded-xl bg-[#173d32] py-3 text-xs font-bold text-white">Simpan Perubahan</button></article></div>
@@ -262,21 +287,29 @@ function AnalysisPage({ page, openDetail, applyPlan }: { page: string; openDetai
     ['15 Mei','450','13','Biji-bijian','9 kg','Aman','Rp75.000'],
     ['14 Mei','490','14','Sayur','11 kg','Waspada','Rp45.000'],
   ].filter(r=>(reportCategory==='Semua kategori'||r[3]===reportCategory)&&r.join(' ').toLowerCase().includes(search.toLowerCase()))
+  const downloadFile = (content: string, filename: string, type: string) => {
+    const url = URL.createObjectURL(new Blob([content], { type }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
   const finishExport = () => {
     if (exportType === 'Unduh PDF') {
-      window.print()
+      setExportType(null)
+      window.setTimeout(() => window.print(), 80)
+      return
     } else if (exportType === 'Unduh Excel') {
       const table = [
         ['Tanggal','Porsi','Staf','Kategori','Limbah','Risiko','Hemat'],
         ...rows,
       ]
       const html = `<table>${table.map(row=>`<tr>${row.map(cell=>`<td>${cell}</td>`).join('')}</tr>`).join('')}</table>`
-      const url = URL.createObjectURL(new Blob([html], { type: 'application/vnd.ms-excel' }))
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `FoodSave-${reportRange}-Mei-2025.xls`
-      link.click()
-      URL.revokeObjectURL(url)
+      downloadFile(html, `FoodSave-${reportRange}-Mei-2025.xls`, 'application/vnd.ms-excel')
     } else {
       openDetail('Pratinjau email siap','Penerima, subjek, pesan, dan lampiran sudah diperiksa. Hubungkan layanan email untuk melakukan pengiriman nyata.')
     }

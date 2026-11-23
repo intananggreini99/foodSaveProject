@@ -1,21 +1,39 @@
-# Catatan Migrasi Frontend–Backend
+# Checklist Migrasi Frontend-Backend
 
-## Sudah terhubung
+Dokumen ini mencatat batas integrasi saat frontend disiapkan. Source backend tidak diubah.
 
-- Login, register, cek sesi, logout: `/api/v1/auth/*`.
-- Nama restoran: `/api/v1/restaurant`.
-- Prediksi ringkas dashboard: `/api/v1/dashboard?on=YYYY-MM-DD`.
-- Proporsi limbah per kategori: `/api/v1/insights/operational`.
+## Integrasi aktif
 
-## Masih perlu dikerjakan
+- [x] Login, register, cek sesi, dan logout melalui `/api/v1/auth/*`.
+- [x] Nama restoran melalui `/api/v1/restaurant`.
+- [x] Ringkasan dashboard melalui `/api/v1/dashboard?on=YYYY-MM-DD`.
+- [x] Proporsi limbah melalui `/api/v1/insights/operational`.
+- [x] Data kalender limbah memakai `/api/v1/daily-operations` bila API tersedia.
+- [x] Tren limbah memakai `/api/v1/dashboard/trend` bila API tersedia.
+- [x] Fallback frontend memakai agregasi dataset, bukan angka acak.
 
-- Backend belum berjalan di lingkungan ini: `http://localhost:8000/health/live` tidak merespons saat validasi.
-- Halaman Input Data Harian masih memakai data contoh; hubungkan ke `daily-operations`, `predictions/preview`, dan endpoint prediksi tersimpan.
-- Halaman Prediksi 7 Hari masih memakai data contoh; hubungkan ke `weekly-predictions`.
-- Halaman Simulasi Porsi masih memakai perhitungan lokal; hubungkan ke `portion-scenarios`.
-- Halaman Laporan masih memakai data contoh; hubungkan ke `reports/summary` dan `report-exports`.
-- Halaman notifikasi dan pengaturan masih berupa UI; hubungkan ke `notifications`, `settings`, dan `users` bila diperlukan.
-- Isi `CORS_ORIGINS` dengan origin frontend deployment dan aktifkan cookie aman saat production.
-- Sediakan data operasional aktual untuk tanggal yang diminta dashboard agar kartu prediksi tidak kosong.
+## Pekerjaan frontend yang masih menunggu API
 
-Tidak ada perubahan pada source backend dalam tahap frontend ini.
+- [ ] Form Input Data Harian mengirim data ke `daily-operations`.
+- [ ] Tombol prediksi menyimpan hasil melalui endpoint prediksi yang disepakati.
+- [ ] Prediksi tujuh hari mengambil data dari `weekly-predictions`.
+- [ ] Simulasi porsi menyimpan skenario melalui `portion-scenarios`.
+- [ ] Laporan mengambil ringkasan dari `reports/summary` dan `report-exports`.
+- [ ] Notifikasi mengambil data dari `notifications`.
+- [ ] Pengaturan akun mengambil dan menyimpan data melalui `settings` dan `users`.
+- [ ] Kirim email laporan memakai layanan email backend; frontend saat ini hanya menampilkan pratinjau.
+
+## Yang perlu disiapkan tim backend
+
+- [ ] Jalankan dan verifikasi `http://localhost:8000/health/live`.
+- [ ] Pastikan kontrak request/response dan autentikasi cookie untuk endpoint di atas sudah final.
+- [ ] Tambahkan CORS origin deployment frontend.
+- [ ] Aktifkan cookie aman, HTTPS, dan kebijakan credential saat production.
+- [ ] Sediakan data operasional aktual untuk tanggal dashboard yang diminta.
+- [ ] Sediakan timestamp `created_at` bila waktu input ingin ditampilkan di tooltip kalender.
+
+## Catatan data
+
+- Dataset fallback yang tersedia berisi catatan historis 2024-08-27 sampai 2024-09-26.
+- Header dan forecast memakai tanggal perangkat saat ini; nilai forecast tidak dianggap sebagai data aktual.
+- Jika API gagal atau kosong, frontend tetap berjalan dengan fallback yang ditandai untuk migrasi.

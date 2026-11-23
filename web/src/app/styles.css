@@ -124,6 +124,13 @@
   .chart-bar {
     transform-origin: bottom center;
     animation: bar-in .65s cubic-bezier(.2,.8,.2,1) both;
+    transition: transform .18s ease, filter .18s ease;
+  }
+
+  .chart-bar:hover,
+  .chart-bar:focus-visible {
+    filter: saturate(1.2) drop-shadow(0 3px 5px rgb(23 61 50 / .22));
+    transform: scaleY(1.04);
   }
 
   .calendar-cell {
@@ -177,10 +184,6 @@
   .calendar-cell:focus > div:first-child {
     filter: saturate(1.2) drop-shadow(0 3px 5px rgb(23 61 50 / .22));
     transform: scale(1.12);
-  }
-
-  .calendar-cell > div:last-child > span:last-child {
-    display: none;
   }
 
   svg[viewBox="0 0 620 250"] path {
