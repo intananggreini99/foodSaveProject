@@ -26,6 +26,17 @@ export type DashboardData = {
   } | null
 }
 
+export type DailyWastePoint = {
+  date: string
+  wasteKg: number
+}
+
+export type TrendPoint = {
+  date: string
+  actual_waste_kg?: number | string | null
+  predicted_waste_kg?: number | string | null
+}
+
 const colors = ['#2d826b', '#74a58e', '#a9c77b', '#e8ad65', '#c77d5d']
 
 function categoryLabel(value: string | null | undefined) {
@@ -98,6 +109,27 @@ export async function getOperationalInsights(): Promise<WasteComposition[]> {
 export async function getDashboard(): Promise<DashboardData> {
   const today = new Date().toISOString().slice(0, 10)
   return request<DashboardData>(`/api/v1/dashboard?on=${today}`)
+}
+
+export async function getDailyOperations(): Promise<DailyWastePoint[]> {
+  if (!hasApiUrl) return []
+  const end = new Date()
+  const start = new Date(end)
+  start.setDate(end.getDate() - 27)
+  const format = (date: Date) => date.toISOString().slice(0, 10)
+  const response = await request<{ items?: Array<{ operation_date?: string; actual_waste_kg?: number | string | null }> }>(
+    `/api/v1/daily-operations?starts_on=${format(start)}&ends_on=${format(end)}&limit=28`,
+  )
+  return (response.items ?? [])
+    .filter((item) => item.operation_date && Number(item.actual_waste_kg) > 0)
+    .map((item) => ({ date: item.operation_date as string, wasteKg: Number(item.actual_waste_kg) }))
+    .sort((left, right) => left.date.localeCompare(right.date))
+}
+
+export async function getTrend(): Promise<{ series?: TrendPoint[] }> {
+  if (!hasApiUrl) return {}
+  const end = new Date().toISOString().slice(0, 10)
+  return request<{ series?: TrendPoint[] }>(`/api/v1/dashboard/trend?end=${end}&days=30`)
 }
 
 export function toAppUser(user: ApiUser, restaurantName = 'Restoran FoodSave') {

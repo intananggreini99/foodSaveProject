@@ -120,6 +120,85 @@
     transform-origin: left center;
     animation: progress-in .9s cubic-bezier(.2,.8,.2,1) .18s both;
   }
+
+  .chart-bar {
+    transform-origin: bottom center;
+    animation: bar-in .65s cubic-bezier(.2,.8,.2,1) both;
+  }
+
+  .calendar-cell {
+    animation: cell-in .35s ease-out both;
+  }
+
+  .calendar-cell:nth-child(2n) { animation-delay: .04s; }
+  .calendar-cell:nth-child(3n) { animation-delay: .08s; }
+
+  .chart-line {
+    stroke-dasharray: 1600;
+    stroke-dashoffset: 1600;
+    animation: chart-line-in 1.25s ease-out .12s forwards;
+    transition: stroke-width .2s ease, filter .2s ease;
+  }
+
+  .chart-line:hover {
+    filter: drop-shadow(0 2px 3px rgb(23 61 50 / .28));
+    stroke-width: 4.5;
+  }
+
+  .chart-point {
+    animation: point-in .45s ease-out both;
+    cursor: crosshair;
+    transition: r .18s ease, filter .18s ease;
+  }
+
+  .chart-point:hover,
+  .chart-point:focus,
+  .chart-point-selected {
+    filter: drop-shadow(0 2px 3px rgb(23 61 50 / .3));
+  }
+
+  .donut-segment {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: donut-in .8s ease-out both;
+    transition: stroke-width .2s ease, filter .2s ease;
+  }
+
+  .donut-segment:hover {
+    filter: drop-shadow(0 2px 3px rgb(23 61 50 / .24));
+    stroke-width: 21;
+  }
+
+  .calendar-cell > div:first-child {
+    transition: transform .18s ease, filter .18s ease;
+  }
+
+  .calendar-cell:hover > div:first-child,
+  .calendar-cell:focus > div:first-child {
+    filter: saturate(1.2) drop-shadow(0 3px 5px rgb(23 61 50 / .22));
+    transform: scale(1.12);
+  }
+
+  svg[viewBox="0 0 620 250"] path {
+    stroke-dasharray: 1200;
+    stroke-dashoffset: 1200;
+    animation: chart-line-in 1.1s ease-out .12s forwards;
+    transition: stroke-width .2s ease, filter .2s ease;
+  }
+
+  svg[viewBox="0 0 620 250"] path:hover {
+    filter: drop-shadow(0 2px 3px rgb(23 61 50 / .28));
+    stroke-width: 5;
+  }
+
+  svg[viewBox="0 0 620 250"] circle {
+    cursor: crosshair;
+    transition: r .18s ease, filter .18s ease;
+  }
+
+  svg[viewBox="0 0 620 250"] circle:hover {
+    filter: drop-shadow(0 2px 3px rgb(23 61 50 / .3));
+  }
 }
 
 @keyframes page-in {
@@ -145,6 +224,30 @@
 @keyframes progress-in {
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
+}
+
+@keyframes bar-in {
+  from { opacity: 0; transform: scaleY(0); }
+  to { opacity: 1; transform: scaleY(1); }
+}
+
+@keyframes cell-in {
+  from { opacity: 0; transform: scale(.72); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes chart-line-in {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes point-in {
+  from { opacity: 0; transform: scale(.5); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes donut-in {
+  from { opacity: 0; transform: scale(.78); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {

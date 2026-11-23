@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { getDashboard, getOperationalInsights, hasApiUrl } from '@/lib/api'
+import { getDashboard, getDailyOperations, getOperationalInsights, getTrend, hasApiUrl } from '@/lib/api'
+import { wasteCalendarData as historicalWasteCalendarData } from '@/lib/waste-data'
 
 type IconName =
   | 'grid'
@@ -86,24 +87,40 @@ function Sidebar({ open, close, active, onNavigate, onProfile, user }: { open: b
 }
 
 function TrendChart() {
-  const actual = [11,12,10,9,13,15,12,11,10,14,18,13,12,9,8,11,13,16,14,12,10,9,12,17,19,15,13,11,10,12]
-  const predicted = [10,11,11,10,12,14,13,10,11,13,15,14,11,10,9,12,12,15,13,13,11,10,11,14,17,14,12,12,11,12]
+  const fallbackActual = [11,12,10,9,13,15,12,11,10,14,18,13,12,9,8,11,13,16,14,12,10,9,12,17,19,15,13,11,10,12]
+  const fallbackPredicted = [10,11,11,10,12,14,13,10,11,13,15,14,11,10,9,12,12,15,13,13,11,10,11,14,17,14,12,12,11,12]
+  const [trendData, setTrendData] = useState({ actual: fallbackActual, predicted: fallbackPredicted, dates: [] as string[] })
   const [hover, setHover] = useState<number | null>(null)
-  const x = (i: number) => 58 + i * (712 / 29)
-  const y = (v: number) => 250 - v * 8.5
+  useEffect(() => {
+    getTrend().then((response) => {
+      const points = (response.series ?? []).filter((item) => item.actual_waste_kg != null || item.predicted_waste_kg != null)
+      if (points.length < 2) return
+      setTrendData({
+        actual: points.map((item) => Number(item.actual_waste_kg ?? item.predicted_waste_kg ?? 0)),
+        predicted: points.map((item) => Number(item.predicted_waste_kg ?? item.actual_waste_kg ?? 0)),
+        dates: points.map((item) => String(item.date)),
+      })
+    }).catch(() => undefined)
+  }, [])
+  const { actual, predicted } = trendData
+  const pointCount = Math.max(actual.length, 2)
+  const chartMax = Math.max(25, Math.ceil(Math.max(...actual, ...predicted) / 5) * 5)
+  const x = (i: number) => 58 + i * (712 / (pointCount - 1))
+  const y = (v: number) => 250 - (v / chartMax) * 210
   const path = (values: number[]) => values.map((v,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
-  const band = predicted.map((v,i)=>`${x(i)},${y(v+1.2)}`).join(' ')+' '+predicted.map((v,i)=>`${x(29-i)},${y(predicted[29-i]-1.2)}`).join(' ')
+  const band = predicted.map((v,i)=>`${x(i)},${y(v+1.2)}`).join(' ')+' '+predicted.map((v,i)=>`${x(predicted.length-1-i)},${y(predicted[predicted.length-1-i]-1.2)}`).join(' ')
+  const chartDateLabel = (index: number) => trendData.dates[index] ? new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(new Date(`${trendData.dates[index]}T00:00:00`)) : `${index + 1} hari lalu`
   return <div className="mt-5 w-full overflow-hidden">
     <div className="mb-2 flex flex-wrap gap-4 text-[10px] text-slate-500"><span className="flex items-center gap-2"><i className="h-0.5 w-5 bg-[#27715f]"/>Aktual</span><span className="flex items-center gap-2"><i className="h-0 w-5 border-t-2 border-dashed border-orange-400"/>Prediksi</span><span className="flex items-center gap-2"><i className="h-2 w-5 bg-slate-200"/>Rentang perkiraan</span></div>
     <svg viewBox="0 0 800 285" className="h-auto min-h-[245px] w-full" role="img" aria-label="Perbandingan aktual dan prediksi limbah 30 hari dalam kilogram">
       <rect x="58" y={y(25)} width="712" height={y(15)-y(25)} fill="#fee2e2" opacity=".55"/><rect x="58" y={y(15)} width="712" height={y(10)-y(15)} fill="#fef3c7" opacity=".7"/><rect x="58" y={y(10)} width="712" height={y(0)-y(10)} fill="#dcfce7" opacity=".55"/>
-      {[0,5,10,15,20,25].map(v=><g key={v}><line x1="58" y1={y(v)} x2="770" y2={y(v)} stroke="#dce3df"/><text x="48" y={y(v)+4} textAnchor="end" fontSize="9" fill="#82908a">{v} kg</text></g>)}
+      {Array.from({ length: chartMax / 5 + 1 }, (_, index) => index * 5).map(v=><g key={v}><line x1="58" y1={y(v)} x2="770" y2={y(v)} stroke="#dce3df"/><text x="48" y={y(v)+4} textAnchor="end" fontSize="9" fill="#82908a">{v} kg</text></g>)}
       <text x="14" y="145" transform="rotate(-90 14 145)" fontSize="9" fill="#82908a">Limbah (kg)</text>
       <polygon points={band} fill="#94a3b8" opacity=".18"/>
-      <path d={path(predicted)} fill="none" stroke="#e99a3d" strokeWidth="2.5" strokeDasharray="7 6"/>
-      <path d={path(actual)} fill="none" stroke="#27715f" strokeWidth="3"/>
-      {actual.map((v,i)=><circle key={i} cx={x(i)} cy={y(v)} r={hover===i?6:4} fill="white" stroke="#27715f" strokeWidth="2" onMouseEnter={()=>setHover(i)} onMouseLeave={()=>setHover(null)}/>)}
-      {[0,4,9,14,19,24,29].map(i=><text key={i} x={x(i)} y="270" textAnchor="middle" fontSize="9" fill="#82908a">{i+1} Mei</text>)}
+      <path className="chart-line chart-line-dashed" d={path(predicted)} fill="none" stroke="#e99a3d" strokeWidth="2.5" strokeDasharray="7 6"/>
+      <path className="chart-line" d={path(actual)} fill="none" stroke="#27715f" strokeWidth="3"/>
+      {actual.map((v,i)=><circle className="chart-point" tabIndex={0} key={i} cx={x(i)} cy={y(v)} r={hover===i?6:4} fill="white" stroke="#27715f" strokeWidth="2" onMouseEnter={()=>setHover(i)} onMouseLeave={()=>setHover(null)} onFocus={()=>setHover(i)} onBlur={()=>setHover(null)}/>)}
+      {[0,4,9,14,19,24,29].filter((i) => i < actual.length).map(i=><text key={i} x={x(i)} y="270" textAnchor="middle" fontSize="9" fill="#82908a">{chartDateLabel(i)}</text>)}
       <text x="414" y="283" textAnchor="middle" fontSize="9" fill="#82908a">Tanggal</text>
       {[10,23].map(i=><g key={i}><line x1={x(i)} y1={y(actual[i])-5} x2={x(i)} y2={y(actual[i])-28} stroke="#b45309"/><rect x={x(i)-35} y={y(actual[i])-47} width="70" height="20" rx="6" fill="#fff7ed"/><text x={x(i)} y={y(actual[i])-34} textAnchor="middle" fontSize="8" fontWeight="700" fill="#b45309">Selisih {Math.abs(actual[i]-predicted[i])} kg</text></g>)}
       {hover!==null && <g><rect x={Math.min(650,Math.max(65,x(hover)-55))} y="10" width="125" height="57" rx="8" fill="#173d32"/><text x={Math.min(650,Math.max(65,x(hover)-55))+9} y="26" fontSize="8" fill="white">{hover+1} Mei 2025</text><text x={Math.min(650,Math.max(65,x(hover)-55))+9} y="40" fontSize="8" fill="#d1fae5">Aktual {actual[hover]} kg · Prediksi {predicted[hover]} kg</text><text x={Math.min(650,Math.max(65,x(hover)-55))+9} y="54" fontSize="8" fill="#fdba74">Selisih {Math.abs(actual[hover]-predicted[hover])} kg</text></g>}
@@ -113,6 +130,16 @@ function TrendChart() {
 }
 
 type WasteSlice = { label: string; value: number; color: string }
+
+function wasteTone(wasteKg: number) {
+  if (wasteKg > 50) return 'bg-red-400'
+  if (wasteKg >= 30) return 'bg-amber-400'
+  return 'bg-emerald-300'
+}
+
+function displayDate(value: string) {
+  return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${value}T00:00:00`))
+}
 
 const wasteComposition: WasteSlice[] = [
   { label: 'Daging', value: 43, color: '#2d826b' },
@@ -127,7 +154,7 @@ function Donut({ composition = wasteComposition }: { insight?: boolean; composit
   return <div className="h-40 w-40 shrink-0">
     <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90 drop-shadow-sm" role="img" aria-label="Donat proporsi kategori limbah">
       <circle cx="60" cy="60" r="43" fill="none" stroke="#edf1ee" strokeWidth="18"/>
-      {segments.map(([value,color],i)=>{const start=offset; offset += Number(value); return <circle key={i} cx="60" cy="60" r="43" fill="none" stroke={String(color)} strokeWidth="18" strokeDasharray={`${Number(value)*2.701-2} 270.1`} strokeDashoffset={-start*2.701}/>})}
+      {segments.map(([value,color],i)=>{const start=offset; offset += Number(value); return <circle className="donut-segment" key={i} cx="60" cy="60" r="43" fill="none" stroke={String(color)} strokeWidth="18" strokeDasharray={`${Number(value)*2.701-2} 270.1`} strokeDashoffset={-start*2.701}/>})}
       <circle cx="60" cy="60" r="28" fill="white"/>
       <text x="60" y="58" textAnchor="middle" fill="#173d32" fontSize="12" fontWeight="700" transform="rotate(90 60 60)">100%</text>
       <text x="60" y="70" textAnchor="middle" fill="#94a3b8" fontSize="6" transform="rotate(90 60 60)">total</text>
@@ -146,6 +173,16 @@ function AnalysisPage({ page, openDetail, applyPlan }: { page: string; openDetai
   const [reportCategory, setReportCategory] = useState('Semua kategori')
   const [exportType, setExportType] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [calendarData, setCalendarData] = useState(historicalWasteCalendarData)
+  const wasteCalendarData = calendarData
+
+  useEffect(() => {
+    getDailyOperations()
+      .then((items) => {
+        if (items.length) setCalendarData(items)
+      })
+      .catch(() => undefined)
+  }, [])
   const predicted = Math.max(4, portions * 0.026).toFixed(1)
 
   if (page === 'Input Data Harian') return <div className="page-enter">
@@ -167,14 +204,22 @@ function AnalysisPage({ page, openDetail, applyPlan }: { page: string; openDetai
   </div>
 
   if (page === 'Prediksi 7 Hari') {
-    const days = [
-      ['Sen','19 Mei',12,'Waspada',470,34],['Sel','20 Mei',9,'Aman',460,31],['Rab','21 Mei',18,'Tinggi',520,37],['Kam','22 Mei',11,'Waspada',470,32],['Jum','23 Mei',14,'Waspada',490,35],['Sab','24 Mei',19,'Tinggi',540,39],['Min','25 Mei',13,'Waspada',480,34],
-    ] as const
+    const forecastBase = new Date()
+    const weekdayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
+    const forecastValues = [12, 9, 18, 11, 14, 19, 13]
+    const days: Array<[string, string, number, string, number, number]> = forecastValues.map((waste, index) => {
+      const date = new Date(forecastBase)
+      date.setDate(forecastBase.getDate() + index)
+      const risk = waste > 15 ? 'Tinggi' : waste >= 10 ? 'Waspada' : 'Aman'
+      const portionsForDay = [470, 460, 520, 470, 490, 540, 480][index]
+      const staffLoad = [34, 31, 37, 32, 35, 39, 34][index]
+      return [weekdayNames[date.getDay()], new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(date), waste, risk, portionsForDay, staffLoad]
+    })
     const day = days[selectedDay]
     return <div className="page-enter">
       <div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-2xl font-bold sm:text-[30px]">Rabu & Sabtu berisiko Tinggi</h1><p className="mt-1 text-sm text-slate-500">Potensi hemat minggu ini <strong className="text-emerald-700">Rp320.000</strong>.</p></div><button onClick={()=>openDetail('Rencana siap diekspor','Rencana 7 hari berisi porsi, staf, dan peringatan risiko telah disiapkan sebagai PDF.')} className="rounded-xl bg-[#173d32] px-4 py-3 text-xs font-semibold text-white">Ekspor Rencana PDF</button></div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">{days.map((d,i)=><button key={d[0]} onClick={()=>setSelectedDay(i)} className={`rounded-2xl border p-4 text-left transition ${i===selectedDay?'ring-2 ring-[#173d32]': ''} ${d[3]==='Tinggi'?'border-red-200 bg-red-50':d[3]==='Aman'?'border-emerald-200 bg-emerald-50':'border-amber-200 bg-amber-50'}`}><p className="text-xs text-slate-500">{d[0]} · {d[1]}</p><strong className="mt-3 block text-2xl">{d[2]} kg</strong><span className={`mt-2 inline-block rounded-full px-2 py-1 text-[10px] font-bold ${d[3]==='Tinggi'?'bg-red-100 text-red-700':d[3]==='Aman'?'bg-emerald-100 text-emerald-700':'bg-amber-100 text-amber-700'}`}>{d[3]}</span><p className="mt-3 text-[10px] text-slate-500">Saran {d[4]} porsi<br/>{d[5]} porsi/staf</p></button>)}</div>
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_.6fr]"><article className="card"><h2 className="section-title">Limbah 7 Hari Mendatang</h2><div className="mt-6 flex h-64 items-end gap-3 border-b border-slate-200">{days.map((d,i)=><div className="flex h-full flex-1 flex-col items-center justify-end gap-2" key={d[0]}><span className="text-xs font-bold">{d[2]}</span><div className={`w-full max-w-14 rounded-t-lg ${d[2]>15?'bg-red-400':d[2]>=10?'bg-amber-400':'bg-emerald-500'}`} style={{height:`${d[2]*9}px`}}/><span className="text-[10px] text-slate-400">{d[0]}</span></div>)}</div><div className="mt-4 flex gap-4 text-[10px] text-slate-500"><span>Hijau: Aman &lt;10 kg</span><span>Kuning: Waspada 10–15 kg</span><span>Merah: Tinggi &gt;15 kg</span></div></article>
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_.6fr]"><article className="card"><h2 className="section-title">Limbah 7 Hari Mendatang</h2><div className="mt-6 flex h-64 items-end gap-3 border-b border-slate-200">{days.map((d,i)=><div className="flex h-full flex-1 flex-col items-center justify-end gap-2" key={d[0]}><span className="text-xs font-bold">{d[2]}</span><div className={`chart-bar w-full max-w-14 rounded-t-lg ${d[2]>15?'bg-red-400':d[2]>=10?'bg-amber-400':'bg-emerald-500'}`} style={{height:`${d[2]*9}px`}}/><span className="text-[10px] text-slate-400">{d[0]}</span></div>)}</div><div className="mt-4 flex flex-wrap gap-4 text-[10px] text-slate-500"><span>Hijau: Aman &lt;10 kg</span><span>Kuning: Waspada 10–15 kg</span><span>Merah: Tinggi &gt;15 kg</span></div></article>
       <article className="card"><h2 className="section-title">Ubah rencana {day[0]}</h2><p className="section-subtitle">Hasil berubah saat input disesuaikan</p><div className="mt-5 space-y-4"><Field label="Porsi" value={String(day[4])}/><Field label="Staf" value={String(Math.round(day[4]/day[5]))}/><Field label="Suhu" value="30°C"/><label className="flex items-center justify-between rounded-xl bg-slate-50 p-3 text-xs font-semibold">Acara khusus<input type="checkbox" defaultChecked={day[0]==='Rab'||day[0]==='Sab'} className="accent-emerald-700"/></label></div><button onClick={()=>openDetail('Rencana hari diperbarui',`${day[0]}, ${day[1]} kini memakai rencana ${day[4]} porsi. Tim dapur akan menerima pembaruan.`)} className="mt-5 w-full rounded-xl bg-[#173d32] py-3 text-xs font-bold text-white">Simpan Perubahan</button></article></div>
       <div className="mt-4 grid grid-cols-3 gap-4">{[['Total limbah','96 kg'],['Perkiraan biaya','Rp1.440.000'],['Potensi hemat','Rp320.000']].map(x=><article className="card" key={x[0]}><p className="text-xs text-slate-400">{x[0]}</p><strong className="mt-2 block text-xl text-[#173d32]">{x[1]}</strong></article>)}</div>
     </div>
@@ -197,7 +242,7 @@ function AnalysisPage({ page, openDetail, applyPlan }: { page: string; openDetai
     <div className="mb-7"><h1 className="text-2xl font-bold sm:text-[30px]">Penyebab terbesar limbah: acara khusus (+2,1 kg)</h1><p className="mt-1 text-sm text-slate-500">Pola dari 90 hari catatan restoran Anda, bukan kepastian.</p></div>
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">{[['Jumat paling boros','+6 kg','Kurangi persiapan awal 8%.'],['Staf ahli lebih hemat','−2 kg/hari','Pasangkan staf ahli saat ramai.'],['Daging naik 3 hari','+3 kg','Periksa pembelian dan penyimpanan.']].map((x,i)=><article className={`rounded-xl border p-4 ${i===1?'border-emerald-200 bg-emerald-50':'border-red-200 bg-red-50'}`} key={x[0]}><Icon name={i===1?'check':'alert'} size={17}/><p className="mt-2 text-xs font-semibold">{x[0]}</p><strong className="mt-1 block text-lg">{x[1]}</strong><p className="mt-1 text-[10px] text-slate-500">{x[2]}</p><button className="mt-2 text-[10px] font-bold text-emerald-800">Terapkan saran</button></article>)}</div>
     <div className="grid gap-4 lg:grid-cols-[1.15fr_.85fr]"><article className="card"><h2 className="section-title">Hal yang Paling Memengaruhi Limbah</h2><p className="section-subtitle">Dampak rata-rata (kg)</p><div className="mt-6 space-y-4">{[['Porsi terlalu banyak',2.8,'red'],['Acara khusus',2.1,'red'],['Beban staf berat',1.9,'red'],['Akhir pekan',1.2,'red'],['Staf berpengalaman',-1.7,'green']].map(([a,b,c])=><div key={String(a)}><div className="mb-1 flex justify-between text-xs"><span>{a}</span><strong className={c==='red'?'text-red-600':'text-emerald-700'}>{Number(b)>0?'+':''}{b} kg</strong></div><div className="h-3 rounded-full bg-slate-100"><div className={`h-full rounded-full ${c==='red'?'bg-red-400':'bg-emerald-500'}`} style={{width:`${Math.abs(Number(b))*28}%`}}/></div></div>)}</div></article><article className="card"><h2 className="section-title">Limbah per Kategori</h2><p className="section-subtitle">Proporsi 911 catatan · 40.851,7 kg</p><div className="mt-5 flex items-center gap-5"><Donut insight/><div className="space-y-3 text-xs">{wasteComposition.map(({ label, value })=><p key={label}><strong>{value}%</strong> {label}</p>)}</div></div></article></div>
-    <div className="mt-4 grid gap-4 lg:grid-cols-2"><article className="card"><h2 className="section-title">Staf & Beban Kerja</h2><div className="mt-6 flex h-40 items-end justify-around">{[['Pemula',17],['Menengah',13],['Ahli',10]].map(([a,b])=><div className="flex flex-col items-center gap-2" key={a}><strong className="text-xs">{b} kg</strong><div className="w-16 rounded-t-lg bg-[#2d826b]" style={{height:`${Number(b)*6}px`}}/><span className="text-xs text-slate-500">{a}</span></div>)}</div><p className="mt-5 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">Jika 1 staf menangani lebih dari 35 porsi, limbah naik sekitar 2 kg. <strong>Tambah 1 staf pada Sabtu.</strong></p><button onClick={()=>openDetail('Saran staf ideal','Gunakan 16 staf pada Sabtu untuk menurunkan beban dari 39 menjadi 34 porsi per staf. Potensi hemat 2 kg atau Rp30.000.')} className="mt-4 text-xs font-bold text-emerald-700">Saran jumlah staf ideal →</button></article><article className="card"><h2 className="section-title">Hari Paling Boros dalam 4 Minggu</h2><div className="mt-5 grid grid-cols-7 gap-2">{Array.from({length:28},(_,i)=><div title={`${6+(i*7)%19} kg`} key={i} className={`aspect-square rounded-md ${i%7===4?'bg-red-400':i%7===5?'bg-amber-400':i%3===0?'bg-emerald-300':'bg-emerald-100'}`}/>)}</div><div className="mt-3 flex justify-between text-[10px] text-slate-400"><span>Sen</span><span>Sel</span><span>Rab</span><span>Kam</span><span>Jum</span><span>Sab</span><span>Min</span></div><div className="mt-5 grid grid-cols-2 gap-3"><div className="rounded-xl bg-emerald-50 p-4"><p className="text-xs">Hari biasa</p><strong className="text-xl">11,8 kg</strong></div><div className="rounded-xl bg-red-50 p-4"><p className="text-xs">Acara khusus</p><strong className="text-xl">15,9 kg</strong></div></div></article></div>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2"><article className="card"><h2 className="section-title">Staf & Beban Kerja</h2><div className="mt-6 flex h-40 items-end justify-around">{[['Pemula',17],['Menengah',13],['Ahli',10]].map(([a,b])=><div className="flex flex-col items-center gap-2" key={a}><strong className="text-xs">{b} kg</strong><div className="chart-bar w-16 rounded-t-lg bg-[#2d826b]" style={{height:`${Number(b)*6}px`}}/><span className="text-xs text-slate-500">{a}</span></div>)}</div><p className="mt-5 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">Jika 1 staf menangani lebih dari 35 porsi, limbah naik sekitar 2 kg. <strong>Tambah 1 staf pada Sabtu.</strong></p><button onClick={()=>openDetail('Saran staf ideal','Gunakan 16 staf pada Sabtu untuk menurunkan beban dari 39 menjadi 34 porsi per staf. Potensi hemat 2 kg atau Rp30.000.')} className="mt-4 text-xs font-bold text-emerald-700">Saran jumlah staf ideal →</button></article><article className="card"><h2 className="section-title">Hari Paling Boros dalam 4 Minggu</h2><p className="section-subtitle">28 catatan terbaru dari dataset operasional</p><div className="mt-5 grid grid-cols-7 gap-2">{wasteCalendarData.map((item)=><div key={item.date} className="calendar-cell group relative" tabIndex={0}><div className={`aspect-square rounded-md ${wasteTone(item.wasteKg)}`}><span className="sr-only">{displayDate(item.date)}: {item.wasteKg.toFixed(2)} kg limbah</span></div><div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 w-36 -translate-x-1/2 rounded-lg bg-[#173d32] p-3 text-[10px] leading-4 text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"><strong className="block">{displayDate(item.date)}</strong><span className="block text-emerald-100">{item.wasteKg.toFixed(2)} kg limbah</span><span className="block text-white/60">Waktu input: tidak tersedia</span></div></div>)}</div><div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[10px] text-slate-500"><span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-emerald-300"/> &lt;30 kg · rendah</span><span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-amber-400"/> 30–50 kg · waspada</span><span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-red-400"/> &gt;50 kg · tinggi</span></div><div className="mt-5 grid grid-cols-2 gap-3"><div className="rounded-xl bg-emerald-50 p-4"><p className="text-xs">Rata-rata 28 catatan</p><strong className="text-xl">{(wasteCalendarData.reduce((sum, item) => sum + item.wasteKg, 0) / wasteCalendarData.length).toFixed(1)} kg</strong></div><div className="rounded-xl bg-red-50 p-4"><p className="text-xs">Tertinggi</p><strong className="text-xl">{Math.max(...wasteCalendarData.map((item) => item.wasteKg)).toFixed(2)} kg</strong></div></div></article></div>
   </div>
 
   const rangeScale = reportRange === 'Mingguan' ? .24 : reportRange === 'Kustom' ? .55 : 1
@@ -250,6 +295,7 @@ function App({ user, onLogout }: { user: AppUser; onLogout?: () => void | Promis
   const [accountOpen, setAccountOpen] = useState(false)
   const [composition, setComposition] = useState(wasteComposition)
   const [prediction, setPrediction] = useState({ value: 12, lower: 10, upper: 15 })
+  const todayLabel = new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())
 
   useEffect(() => {
     getOperationalInsights()
@@ -277,7 +323,7 @@ function App({ user, onLogout }: { user: AppUser; onLogout?: () => void | Promis
     <main className="lg:ml-[264px]">
       <header className="sticky top-0 z-30 flex h-[76px] items-center border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur-md sm:px-7 lg:px-9">
         <button onClick={() => setMenuOpen(true)} className="mr-3 rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"><Icon name="menu"/></button>
-        <div><p className="text-lg font-bold tracking-tight sm:text-xl">{active}</p><p className="hidden text-xs text-slate-400 sm:block">Analisis operasional untuk keputusan berbasis data</p></div>
+        <div><p className="text-lg font-bold tracking-tight sm:text-xl">{active}</p><p className="hidden text-xs text-slate-400 sm:block">Hari ini, {todayLabel} · Analisis operasional berbasis data</p></div>
         <div className="ml-auto flex items-center gap-2.5">
           <button onClick={()=>setDetail({title:'3 perhatian hari ini',body:'Limbah daging naik 3 hari, acara khusus besok, dan beban staf Sabtu diperkirakan berat.'})} className="relative grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500"><Icon name="bell" size={18}/><span className="absolute right-1.5 top-1.5 grid h-4 w-4 place-items-center rounded-full bg-orange-500 text-[9px] text-white">3</span></button>
           <button onClick={()=>setDetail({title:'Pilih periode laporan',body:'Periode aktif: 1–30 Mei 2025. Data berisi 30 hari operasional, 14.620 porsi, dan total limbah 342 kg.'})} className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-600 sm:flex"><Icon name="calendar" size={16}/> 1–30 Mei 2025 <Icon name="chevron" size={13}/></button>
