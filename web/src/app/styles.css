@@ -1,0 +1,90 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+.figma-custom-code-fragment {
+  display: contents;
+}
+
+.figma-bypass-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 2147483647;
+  transform: translateY(-150%);
+  border-radius: 6px;
+  background: #111827;
+  color: #fff;
+  padding: 8px 12px;
+  font: 600 14px/1.2 system-ui, sans-serif;
+  text-decoration: none;
+}
+
+.figma-bypass-link:focus {
+  transform: translateY(0);
+}
+@layer base {
+  :root {
+    font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+    font-synthesis: none;
+  }
+
+  body {
+    min-width: 320px;
+    min-height: 100vh;
+    background: #f5f7f4;
+  }
+
+  button {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  .card {
+    border: 1px solid rgb(226 232 240 / 0.78);
+    border-radius: 16px;
+    background: white;
+    padding: 20px;
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.025);
+  }
+
+  .section-title {
+    font-size: 15px;
+    line-height: 1.4;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: #1c3029;
+  }
+
+  .section-subtitle {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #94a3b8;
+  }
+
+  .metric-icon {
+    display: grid;
+    height: 38px;
+    width: 38px;
+    place-items: center;
+    border-radius: 10px;
+  }
+
+  .metric-icon.green { background: #e7f4ef; color: #27715f; }
+  .metric-icon.lime { background: #f0f7dc; color: #6e8b30; }
+  .metric-icon.blue { background: #e7f2f5; color: #3d7687; }
+  .metric-icon.orange { background: #fff0df; color: #c16a2e; }
+
+  .page-enter {
+    animation: page-in .28s ease-out;
+  }
+}
+
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 639px) {
+  .card { padding: 17px; border-radius: 14px; }
+}
