@@ -193,6 +193,8 @@ function AnalysisPage({ page, openDetail, applyPlan }: { page: string; openDetai
       'Lihat perbaikan': '12 data tidak wajar sudah ditandai untuk ditinjau sebelum dikirim ke backend.',
       'Lihat saran': 'Tinjau perubahan porsi dan staf pada simulasi untuk memilih rencana yang paling aman.',
       'Terapkan saran': 'Saran operasional ditandai sebagai rencana yang perlu diterapkan pada hari ini.',
+      Edit: 'Form edit siap dibuka setelah endpoint input harian terhubung ke backend.',
+      Hapus: 'Penghapusan belum dilakukan karena tabel ini masih memakai data fallback frontend.',
     }
     const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('button'))
       .filter((button) => actions[button.textContent?.trim() ?? ''])
