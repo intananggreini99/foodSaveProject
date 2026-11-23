@@ -29,6 +29,7 @@ export type DashboardData = {
 export type DailyWastePoint = {
   date: string
   wasteKg: number
+  inputTime?: string
 }
 
 export type TrendPoint = {
@@ -117,12 +118,12 @@ export async function getDailyOperations(): Promise<DailyWastePoint[]> {
   const start = new Date(end)
   start.setDate(end.getDate() - 27)
   const format = (date: Date) => date.toISOString().slice(0, 10)
-  const response = await request<{ items?: Array<{ operation_date?: string; actual_waste_kg?: number | string | null }> }>(
+  const response = await request<{ items?: Array<{ operation_date?: string; actual_waste_kg?: number | string | null; created_at?: string }> }>(
     `/api/v1/daily-operations?starts_on=${format(start)}&ends_on=${format(end)}&limit=28`,
   )
   return (response.items ?? [])
     .filter((item) => item.operation_date && Number(item.actual_waste_kg) > 0)
-    .map((item) => ({ date: item.operation_date as string, wasteKg: Number(item.actual_waste_kg) }))
+    .map((item) => ({ date: item.operation_date as string, wasteKg: Number(item.actual_waste_kg), inputTime: item.created_at }))
     .sort((left, right) => left.date.localeCompare(right.date))
 }
 

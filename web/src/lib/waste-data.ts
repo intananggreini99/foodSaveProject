@@ -1,6 +1,7 @@
 export type WasteCalendarItem = {
   date: string
   wasteKg: number
+  inputTime?: string
 }
 
 export const wasteCalendarData: WasteCalendarItem[] = [
