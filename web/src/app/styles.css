@@ -179,6 +179,10 @@
     transform: scale(1.12);
   }
 
+  .calendar-cell > div:last-child > span:last-child {
+    display: none;
+  }
+
   svg[viewBox="0 0 620 250"] path {
     stroke-dasharray: 1200;
     stroke-dashoffset: 1200;
