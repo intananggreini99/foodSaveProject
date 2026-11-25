@@ -1,39 +1,46 @@
-# Checklist Migrasi Frontend-Backend
+# Integrasi Frontend-Backend
 
-Dokumen ini mencatat batas integrasi saat frontend disiapkan. Source backend tidak diubah.
+Frontend Next.js (`web/`) sudah terhubung penuh ke FastAPI. Data demo, angka contoh, dan
+dataset cadangan di frontend sudah dihapus; setiap halaman memakai data restoran yang login.
+Kode backend tidak diubah untuk integrasi ini.
 
 ## Integrasi aktif
 
-- [x] Login, register, cek sesi, dan logout melalui `/api/v1/auth/*`.
-- [x] Nama restoran melalui `/api/v1/restaurant`.
-- [x] Ringkasan dashboard melalui `/api/v1/dashboard?on=YYYY-MM-DD`.
-- [x] Proporsi limbah melalui `/api/v1/insights/operational`.
-- [x] Data kalender limbah memakai `/api/v1/daily-operations` bila API tersedia.
-- [x] Tren limbah memakai `/api/v1/dashboard/trend` bila API tersedia.
-- [x] Fallback frontend memakai agregasi dataset, bukan angka acak.
+- [x] Daftar, masuk, cek sesi, keluar (`/auth/*`); kembali ke layar Masuk saat sesi berakhir.
+- [x] Nama restoran (`/restaurant`) dan pengaturan restoran (`GET/PUT /settings`) di panel akun.
+- [x] Overview: `dashboard`, `dashboard/trend`, `reports/summary`, `insights/operational`,
+      `portion-scenarios/options`; tombol *Jalankan prediksi* dan *Terapkan Saran*.
+- [x] Input Data Harian: `predictions/preview` (pratinjau langsung), `POST/PUT daily-operations`,
+      `daily-operations/{id}/predict`, riwayat `daily-operations/{id}/corrections`.
+- [x] Unggah CSV/Excel: `imports?apply=false` (periksa) lalu `imports?apply=true` (simpan), dan
+      prediksi opsional untuk setiap tanggal yang tersimpan.
+- [x] Prediksi 7 Hari: `weekly-predictions` (buat, baca, ubah satu hari).
+- [x] Simulasi Porsi: `portion-scenarios/options`, `portion-scenarios`, `portion-scenarios/{id}/apply`;
+      jumlah porsi bebas di luar 4 skenario diterapkan lewat `PUT daily-operations` + prediksi.
+- [x] Insight & Penyebab: `daily-operations` (90 hari) dan `insights/operational`.
+- [x] Laporan: `reports/summary`, `report-exports` (PDF/XLSX dibuat backend, diunduh lewat
+      `report-exports/{id}/file`), email lewat pekerja laporan dan Mailpit.
+- [x] Notifikasi: `notifications` dan `notifications/{id}/read`.
+- [x] Status backend dan model aktif: `/health/ready`.
 
-## Pekerjaan frontend yang masih menunggu API
+## Perubahan tampilan yang perlu diketahui
 
-- [ ] Form Input Data Harian mengirim data ke `daily-operations`.
-- [ ] Tombol prediksi menyimpan hasil melalui endpoint prediksi yang disepakati.
-- [ ] Prediksi tujuh hari mengambil data dari `weekly-predictions`.
-- [ ] Simulasi porsi menyimpan skenario melalui `portion-scenarios`.
-- [ ] Laporan mengambil ringkasan dari `reports/summary` dan `report-exports`.
-- [ ] Notifikasi mengambil data dari `notifications`.
-- [ ] Pengaturan akun mengambil dan menyimpan data melalui `settings` dan `users`.
-- [ ] Kirim email laporan memakai layanan email backend; frontend saat ini hanya menampilkan pratinjau.
+- Tombol *Buka demo frontend* dihapus; aplikasi selalu memakai backend.
+- Tombol *Hapus* di tabel 5 Input Terakhir diganti *Riwayat*, karena backend sengaja tidak
+  menghapus input harian (koreksi dicatat sebagai riwayat).
+- Form Input Data Harian mendapat kolom *Limbah aktual*, *Jenis acara* (saat acara khusus
+  dicentang), dan *Alasan perubahan* (saat mengubah tanggal yang sudah ada), karena kolom ini
+  dibutuhkan API.
+- Batas warna Aman/Waspada/Tinggi mengikuti Pengaturan restoran, bukan angka tetap 10/15 kg.
+- Simulasi Porsi punya pilihan *Rencana dasar* karena simulasi backend selalu berangkat dari
+  satu input harian yang tersimpan.
+- Prediksi 7 Hari punya tombol *Buat Rencana Baru*; isian awal ketujuh hari diambil dari input
+  harian terakhir lalu bisa diubah per hari.
 
-## Yang perlu disiapkan tim backend
+## Batasan yang tersisa
 
-- [ ] Jalankan dan verifikasi `http://localhost:8000/health/live`.
-- [ ] Pastikan kontrak request/response dan autentikasi cookie untuk endpoint di atas sudah final.
-- [ ] Tambahkan CORS origin deployment frontend.
-- [ ] Aktifkan cookie aman, HTTPS, dan kebijakan credential saat production.
-- [ ] Sediakan data operasional aktual untuk tanggal dashboard yang diminta.
-- [ ] Sediakan timestamp `created_at` bila waktu input ingin ditampilkan di tooltip kalender.
-
-## Catatan data
-
-- Dataset fallback yang tersedia berisi catatan historis 2024-08-27 sampai 2024-09-26.
-- Header dan forecast memakai tanggal perangkat saat ini; nilai forecast tidak dianggap sebagai data aktual.
-- Jika API gagal atau kosong, frontend tetap berjalan dengan fallback yang ditandai untuk migrasi.
+- *Risiko kehabisan* di Simulasi Porsi adalah aturan frontend (pengurangan di atas 15% = tinggi),
+  bukan keluaran model.
+- *Potensi hemat* di Prediksi 7 Hari dihitung frontend: biaya limbah di atas batas Aman.
+- Harga bahan per kg akun baru bernilai 0 (bawaan backend); frontend menampilkan pengingat
+  sampai harga diisi di Pengaturan.

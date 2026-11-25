@@ -1,35 +1,32 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import AuthScreen from './AuthScreen'
 import FoodSaveApp, { type AppUser } from './FoodSaveApp'
-import { getMe, getRestaurant, hasApiUrl, logout, toAppUser } from '@/lib/api'
+import { ApiError, getMe, getRestaurant, logout, setUnauthorizedHandler, type ApiUser } from '@/lib/api'
 
-const demoUser: AppUser = {
-  id: 'demo',
-  email: 'manager@foodsave.id',
-  name: 'Alya Rahma',
-  restaurantName: 'FoodSave Restaurant',
+async function appUserFrom(user: ApiUser): Promise<AppUser> {
+  const restaurant = await getRestaurant().catch(() => undefined)
+  return { id: String(user.id), email: user.email, name: user.name, role: user.role, restaurantName: restaurant?.name ?? 'Restoran FoodSave' }
 }
 
 export default function HomePage() {
-  const [user, setUser] = useState<AppUser | null>(hasApiUrl ? null : demoUser)
-  const [checkingSession, setCheckingSession] = useState(hasApiUrl)
+  const [user, setUser] = useState<AppUser | null>(null)
+  const [checking, setChecking] = useState(true)
+  const [notice, setNotice] = useState('')
 
-  async function appUserFromApi(currentUser: Awaited<ReturnType<typeof getMe>>) {
-    const restaurant = await getRestaurant().catch(() => undefined)
-    return toAppUser(currentUser, restaurant?.name)
-  }
+  const signOut = useCallback((message = '') => { setUser(null); setNotice(message) }, [])
 
   useEffect(() => {
-    if (!hasApiUrl) return
+    setUnauthorizedHandler(() => signOut('Sesi berakhir. Silakan masuk kembali.'))
     getMe()
-      .then(async (currentUser) => setUser(await appUserFromApi(currentUser)))
-      .catch(() => setUser(null))
-      .finally(() => setCheckingSession(false))
-  }, [])
+      .then(async (current) => setUser(await appUserFrom(current)))
+      .catch((error) => { if (!(error instanceof ApiError && error.status === 401)) setNotice(error.message) })
+      .finally(() => setChecking(false))
+    return () => setUnauthorizedHandler(null)
+  }, [signOut])
 
-  if (checkingSession) return <div className="grid min-h-screen place-items-center bg-[#f5f7f4] text-sm text-slate-500">Memeriksa sesi...</div>
-  if (!user) return <AuthScreen onAuthenticated={async (nextUser) => setUser(await appUserFromApi(nextUser))} onDemo={() => setUser(demoUser)} />
-  return <FoodSaveApp user={user} onLogout={hasApiUrl ? async () => { await logout().catch(() => undefined); setUser(null) } : undefined} />
+  if (checking) return <div className="grid min-h-screen place-items-center bg-[#f5f7f4] text-sm text-slate-500">Memeriksa sesi...</div>
+  if (!user) return <AuthScreen notice={notice} onAuthenticated={async (next) => { setNotice(''); setUser(await appUserFrom(next)) }} />
+  return <FoodSaveApp user={user} onLogout={async () => { await logout().catch(() => undefined); signOut() }} />
 }

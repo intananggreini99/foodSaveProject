@@ -13,4 +13,5 @@ RUN groupadd --system foodsave && useradd --system --gid foodsave foodsave \
     && mkdir -p /app/storage && chown -R foodsave:foodsave /app/storage
 USER foodsave
 EXPOSE 8000
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Keep-alive > 5 detik: proxy frontend (Node) menutup koneksi menganggur lebih dulu, mencegah ECONNRESET.
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "75"]

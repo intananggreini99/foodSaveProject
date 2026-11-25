@@ -13,7 +13,7 @@
 #   SatisView  : 3000, 5433, 8080, 9870      CampusFlow : 8081, 8088
 #   FoodSave   : API 8010 (Swagger UI /docs) · PostgreSQL 5434 · MLflow 5010 · HDFS 9871 · Mailpit 8026
 # Semua port bisa diubah lewat .env (variabel FOODSAVE_*_PORT).
-name: foodsave
+name: foodsave-testing
 
 x-db-env: &db-env
   DATABASE_HOST: postgres

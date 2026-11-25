@@ -1,20 +1,18 @@
 'use client'
 
 import { FormEvent, useState } from 'react'
-import { login, register } from '@/lib/api'
-
-type ApiUser = Awaited<ReturnType<typeof login>>
+import { login, register, type ApiUser } from '@/lib/api'
 
 export default function AuthScreen({
   onAuthenticated,
-  onDemo,
+  notice = '',
 }: {
-  onAuthenticated: (user: ApiUser) => void
-  onDemo: () => void
+  onAuthenticated: (user: ApiUser) => void | Promise<void>
+  notice?: string
 }) {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [pending, setPending] = useState(false)
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState(notice)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -30,9 +28,9 @@ export default function AuthScreen({
             email: String(form.get('email')),
             password: String(form.get('password')),
           })
-      onAuthenticated(user)
-    } catch {
-      setMessage('Akun atau data belum dapat diproses. Periksa koneksi backend dan isian form.')
+      await onAuthenticated(user)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Akun atau data belum dapat diproses. Periksa koneksi backend dan isian form.')
     } finally {
       setPending(false)
     }
@@ -57,7 +55,7 @@ export default function AuthScreen({
             <button disabled={pending} className="w-full rounded-xl bg-[#173d32] py-3.5 text-sm font-bold text-white disabled:opacity-60">{pending ? 'Memproses...' : mode === 'login' ? 'Masuk' : 'Buat Akun & Masuk'}</button>
           </form>
           <button type="button" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setMessage('') }} className="mt-6 w-full text-center text-xs font-semibold text-[#2d826b]">{mode === 'login' ? 'Belum punya akun? Buat akun manager' : 'Sudah punya akun? Masuk'}</button>
-          <button type="button" onClick={onDemo} className="mt-4 w-full rounded-xl border border-slate-200 py-3 text-xs font-semibold text-slate-500">Buka demo frontend</button>
+          <p className="mt-4 text-center text-[11px] leading-5 text-slate-400">{mode === 'login' ? 'Data tersimpan di backend FoodSave (FastAPI + PostgreSQL) di laptop ini.' : 'Akun baru menjadi pemilik restoran. Kata sandi minimal 10 karakter.'}</p>
         </div>
       </section>
     </main>

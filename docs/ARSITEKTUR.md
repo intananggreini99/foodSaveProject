@@ -6,7 +6,8 @@ Dokumen ini memetakan diagram *Arsitektur Sistem FoodSave* ke kode dan layanan D
 
 | Komponen di diagram | Layanan Compose | Kode |
 |---|---|---|
-| Pengguna → Swagger UI FastAPI (`/docs`); frontend belum dipasang | `api` | `backend/app/openapi_docs.py` (kelompok dan judul endpoint), contoh body di `backend/app/schemas.py` |
+| Pengguna → frontend web (http://localhost:3010); `/api/v1` dan `/health` diteruskan server Next.js ke `api` | `web` | `web/src/` (halaman di `components/`, klien API di `lib/api.ts`, proxy di `web/next.config.ts`) |
+| Pengguna → Swagger UI FastAPI (`/docs`) | `api` | `backend/app/openapi_docs.py` (kelompok dan judul endpoint), contoh body di `backend/app/schemas.py` |
 | FastAPI: API /api/v1 | `api` | `backend/app/routers/` |
 | FastAPI: layanan prediksi (model .pkl di memori) | `api` | `backend/app/services/prediction_service.py` |
 | FastAPI: pekerja laporan (PDF, XLSX, email) | `api` (buat file), `report-worker` (email) | `backend/app/services/report_files.py`, `backend/app/workers/report_worker.py` |
@@ -81,7 +82,8 @@ tetap berlaku, misalnya: kunci `daily_operations` → simpan `prediction_results
 ## 5. Fitur → jenis data → endpoint
 
 Di Swagger UI (`/docs`) endpoint dikelompokkan dengan nama fitur yang sama dan bernomor
-sesuai urutan mencoba. Kolom "Fitur" memakai nama halaman frontend yang direncanakan.
+sesuai urutan mencoba. Kolom "Fitur" memakai nama halaman frontend (`web/`) yang memakai
+endpoint tersebut; pemetaan lengkap per halaman ada di [FRONTEND_BACKEND_GAPS.md](FRONTEND_BACKEND_GAPS.md).
 
 | Fitur | Jenis | Endpoint utama |
 |---|---|---|
@@ -149,6 +151,10 @@ bersamaan, median 161 ms, p95 267 ms. Model dimuat dengan `n_jobs=1` untuk infer
   PostgreSQL, server MLflow, FastAPI (uvicorn), pekerja laporan, dan SMTP sungguhan, serta
   WebHDFS tiruan lewat jaringan (namenode + datanode dengan redirect 307 dan JMX). Kontainer
   Hadoop bde2020 sendiri baru teruji di laptop Anda (dipakai SatisView).
+- Frontend diuji end-to-end dengan Playwright terhadap FastAPI sungguhan (daftar akun, unggah
+  CSV, input dan koreksi, rencana 7 hari, simulasi, laporan PDF/XLSX, email, pengaturan,
+  keluar-masuk). Build image `web` (node:22-alpine) baru teruji di laptop Anda; langkah
+  build-nya (pnpm 10.28, build standalone, proxy ke `api:8000`) sudah dicoba di luar Docker.
 - Perintah backup dan pulihkan di README diuji dengan PowerShell 7 dan perintah `docker`
   tiruan. Pemulihan SQL diuji dengan PostgreSQL sungguhan. Salin HDFS memakai
   `hdfs dfs -get/-put` di container namenode, jadi cobalah sekali backup lalu pulihkan

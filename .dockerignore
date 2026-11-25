@@ -9,3 +9,6 @@ research
 docs
 **/mlruns
 **/mlflow.db
+
+# Frontend dibangun terpisah dari folder web (lihat web/Dockerfile)
+web

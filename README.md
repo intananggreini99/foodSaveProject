@@ -6,7 +6,8 @@ Random Forest yang dilatih ulang lewat pipeline MLflow dan disajikan oleh FastAP
 ## Arsitektur
 
 ```
-Pengguna ─▶ Swagger UI (/docs) ◀──REST──▶ FastAPI ◀──▶ PostgreSQL "foodsave"
+Pengguna ─▶ Web Next.js :3010 ──/api/v1──▶ FastAPI ◀──▶ PostgreSQL "foodsave"
+         └▶ Swagger UI :8010/docs ───────────┘
                                              │  API /api/v1       ├─ operational
                                              │  pekerja laporan    ├─ prediction
                                              │  layanan prediksi   └─ model_analysis
@@ -23,8 +24,9 @@ Penjelasan lengkap per komponen, aliran data, tabel, dan endpoint ada di
 ## Struktur folder
 
 ```
-├── compose.yaml          semua layanan (PostgreSQL, HDFS, MLflow, FastAPI, pekerja, Mailpit)
+├── compose.yaml          semua layanan (frontend, PostgreSQL, HDFS, MLflow, FastAPI, pekerja, Mailpit)
 ├── .env.example          contoh konfigurasi
+├── web/                  frontend Next.js: src/app (kerangka, login), src/components (6 halaman), src/lib/api.ts
 ├── backend/              FastAPI: app/ (routers, services, workers), migrations/, tests/
 ├── ml/                   pipeline MLflow: foodsave_ml/ (6 langkah), tests/
 ├── shared/               paket foodsave_core: preprocessing + akses HDFS (dipakai backend & ml)
@@ -37,9 +39,10 @@ Penjelasan lengkap per komponen, aliran data, tabel, dan endpoint ada di
 ## Rilis lokal di laptop (localhost)
 
 Proyek ini dirilis untuk dipakai di laptop sendiri, bukan untuk deploy ke server atau
-internet. Belum ada frontend: semua fitur dicoba lewat Swagger UI FastAPI di
-http://localhost:8010/docs. Semua port hanya terbuka di `127.0.0.1`, sehingga perangkat lain di jaringan
-Wi-Fi yang sama pun tidak bisa mengaksesnya. Yang dibutuhkan hanya Docker Desktop.
+internet. Aplikasi dibuka di http://localhost:3010 (frontend Next.js yang memakai data
+FastAPI); Swagger UI tetap tersedia di http://localhost:8010/docs. Semua port hanya terbuka
+di `127.0.0.1`, sehingga perangkat lain di jaringan Wi-Fi yang sama pun tidak bisa
+mengaksesnya. Yang dibutuhkan hanya Docker Desktop (tidak perlu Node.js maupun Vercel).
 
 Semua perintah di bawah diketik satu per satu di PowerShell. Tunggu satu perintah selesai
 tanpa error sebelum menjalankan perintah berikutnya.
@@ -57,7 +60,7 @@ Di Notepad, ganti nilai `POSTGRES_PASSWORD` (huruf dan angka saja), simpan, lalu
 ### Langkah 2: cek port tidak bentrok
 
 ```powershell
-Get-NetTCPConnection -State Listen -LocalPort 8010,5434,5010,9871,8026 -ErrorAction SilentlyContinue
+Get-NetTCPConnection -State Listen -LocalPort 3010,8010,5434,5010,9871,8026 -ErrorAction SilentlyContinue
 ```
 
 Tidak ada keluaran berarti semua port bebas. Bila muncul baris, lihat container mana yang
@@ -103,19 +106,21 @@ curl.exe -s http://localhost:8010/health/ready
 Sistem siap bila hasilnya memuat `"status":"ready"`. Pakai `curl.exe`, bukan `curl`, karena
 di Windows PowerShell `curl` adalah nama lain `Invoke-WebRequest`.
 
-### Langkah 5: buka Swagger UI
+### Langkah 5: buka aplikasi
 
 ```powershell
-Start-Process http://localhost:8010/docs
+Start-Process http://localhost:3010
 ```
 
-Lanjutkan dengan panduan [Mencoba fitur lewat Swagger UI](#mencoba-fitur-lewat-swagger-ui).
+Lanjutkan dengan panduan [Memakai aplikasi web](#memakai-aplikasi-web). Swagger UI tetap bisa
+dibuka dengan `Start-Process http://localhost:8010/docs`.
 
 ### Pemakaian sehari-hari
 
 | Keperluan | Perintah |
 |---|---|
 | Nyalakan | `docker compose up -d` |
+| Buka aplikasi | `Start-Process http://localhost:3010` |
 | Cek siap | `curl.exe -s http://localhost:8010/health/ready` |
 | Status semua layanan | `docker compose ps` |
 | Log satu layanan | `docker compose logs -f api` (Ctrl+C untuk keluar) |
@@ -273,6 +278,7 @@ Port host dibuat berbeda dari project lain di laptop yang sama (SatisView memaka
 
 | Layanan | Alamat |
 |---|---|
+| Aplikasi web (frontend) | http://localhost:3010 |
 | API + dokumentasi | http://localhost:8010/docs |
 | Status siap | http://localhost:8010/health/ready |
 | MLflow | http://localhost:5010 |
@@ -299,6 +305,35 @@ docker compose run --rm trainer python -m foodsave_ml.pipeline --no-activate   #
 ```
 
 FastAPI memuat versi baru otomatis pada permintaan prediksi berikutnya.
+
+### Memakai aplikasi web
+
+Buka http://localhost:3010. Semua angka di setiap halaman berasal dari FastAPI dan
+PostgreSQL; tidak ada lagi data demo. Browser hanya berbicara dengan alamat frontend:
+server Next.js meneruskan `/api/v1` ke layanan `api`, sehingga cookie login tetap satu origin.
+
+Pertama kali:
+
+1. Klik **Belum punya akun? Buat akun manager**, isi nama, nama restoran, email, dan kata
+   sandi (minimal 10 karakter). Akun pertama menjadi pemilik restoran.
+2. Klik nama Anda di kiri bawah, isi **Harga bahan per kg** di *Pengaturan restoran*, lalu
+   **Simpan Pengaturan**. Selama harga masih 0, semua biaya tampil Rp0 (ada pengingat kuning).
+3. Buka **Input Data Harian → Unggah File (CSV/Excel)**, klik **Unduh contoh CSV (30 hari)**,
+   lalu **Pilih file** dan pilih file yang baru diunduh. Setelah diperiksa, klik
+   **Simpan 31 baris** (biarkan *Jalankan prediksi* tercentang). Tanggal di file contoh
+   mengikuti hari saat diunduh, jadi Overview langsung terisi.
+
+| Halaman | Yang dilakukan | Endpoint FastAPI |
+|---|---|---|
+| Overview | Prediksi hari ini, saran porsi (tombol *Terapkan Saran*), 4 metrik, aktual vs prediksi 30 hari, komposisi limbah, target bulanan | `dashboard`, `dashboard/trend`, `reports/summary`, `insights/operational`, `portion-scenarios/options` |
+| Input Data Harian | Form harian dengan pratinjau langsung, simpan & prediksi, koreksi dengan alasan, riwayat koreksi, unggah CSV/Excel | `predictions/preview`, `daily-operations`, `daily-operations/{id}/predict`, `imports` |
+| Prediksi 7 Hari | Buat rencana 7 hari (isian awal dari data terakhir), ubah satu hari lalu prediksi ulang | `weekly-predictions` |
+| Simulasi Porsi | Geser porsi/staf (pratinjau model), bandingkan 0/5/10/15%, simpan skenario, terapkan ke rencana | `portion-scenarios/options`, `portion-scenarios`, `portion-scenarios/{id}/apply` |
+| Insight & Penyebab | Selisih limbah per kondisi (acara, beban staf, akhir pekan, pengalaman), kategori, kalender 28 hari | `daily-operations`, `insights/operational` |
+| Laporan | Ringkasan mingguan/bulanan/kustom, unduh PDF/Excel buatan backend, kirim email (lihat di Mailpit http://localhost:8026) | `reports/summary`, `report-exports` |
+| Lonceng & akun | Notifikasi prediksi Tinggi, status backend, model aktif, pengaturan restoran, keluar | `notifications`, `settings`, `/health/ready` |
+
+Hanya pemilik dan manager yang dapat menyimpan; akun berperan staf hanya membaca.
 
 ### Mencoba fitur lewat Swagger UI
 
@@ -340,6 +375,8 @@ Swagger UI mengirim POST/PUT dari alamat http://localhost:8010, jadi alamat itu 
 | `pull access denied for foodsave-...` | Compose versi lama. Pastikan memakai `compose.yaml` terbaru (setiap image lokal punya `build` dan `pull_policy: build`). |
 | `hdfs-init` lama menunggu | Lihat `docker compose logs hdfs-init namenode datanode`. Pesan "Menunggu HDFS siap" normal selama datanode belum terdaftar (biasanya < 1 menit). |
 | `/health/ready` 503 "Belum ada model aktif" | Pelatihan awal belum selesai. Pantau `docker compose logs -f trainer-init`. |
+| http://localhost:3010 tidak terbuka | Layanan `web` belum menyala; ia menunggu `api` sehat. Cek `docker compose ps web` dan `docker compose logs web`. |
+| Aplikasi web menampilkan "Backend FoodSave tidak dapat dihubungi" | API belum siap atau masih pelatihan awal. Cek `curl.exe -s http://localhost:8010/health/ready`, lalu muat ulang halaman. |
 | Swagger tidak terbuka / `ERR_CONNECTION_REFUSED` | API belum menyala atau masih pelatihan awal. Cek `docker compose ps` dan `curl.exe -s http://localhost:8010/health/ready`. |
 | 403 "Origin permintaan tidak diizinkan" saat Execute | `CORS_ORIGINS` di `.env` belum memuat alamat Swagger. Isi `CORS_ORIGINS=http://localhost:8010,http://127.0.0.1:8010`, lalu `docker compose up -d`. |
 | 401 "Silakan login terlebih dahulu" | Jalankan *Daftar akun* atau *Masuk* di kelompok 1 dulu, di tab browser yang sama. |
@@ -363,14 +400,26 @@ export MLFLOW_TRACKING_URI=sqlite:///mlflow.db
 (cd backend && alembic upgrade head)
 PYTHONPATH=ml python -m foodsave_ml.bootstrap --seed dataset/raw/train.csv
 PYTHONPATH=ml python -m foodsave_ml.pipeline
-(cd backend && uvicorn app.main:app --reload)
+(cd backend && uvicorn app.main:app --reload --port 8010)
 ```
+
+Frontend (butuh Node.js 22 dan pnpm), di terminal lain:
+
+```bash
+cd web
+pnpm install
+pnpm dev        # http://localhost:3010, /api/v1 diteruskan ke http://localhost:8010
+```
+
+Bila API berjalan di alamat lain, isi `API_PROXY_TARGET` (mis. `API_PROXY_TARGET=http://localhost:8000 pnpm dev`)
+dan pastikan `CORS_ORIGINS` API memuat `http://localhost:3010`.
 
 ## Pengujian
 
 ```bash
 python backend/run_tests.py        # 52 tes: integrasi, keandalan, HDFS, email, Swagger (PostgreSQL *_test)
 python -m pytest ml/tests          # 5 tes pipeline tanpa database
+cd web && pnpm typecheck && pnpm build   # cek TypeScript dan build frontend
 ```
 
 Tes backend menjalankan pipeline MLflow sungguhan (mode cepat), lalu menguji setiap halaman
