@@ -133,13 +133,6 @@
     transform: scaleY(1.04);
   }
 
-  .calendar-cell {
-    animation: cell-in .35s ease-out both;
-  }
-
-  .calendar-cell:nth-child(2n) { animation-delay: .04s; }
-  .calendar-cell:nth-child(3n) { animation-delay: .08s; }
-
   .chart-line {
     stroke-dasharray: 1600;
     stroke-dashoffset: 1600;
@@ -174,16 +167,6 @@
   .donut-segment:hover {
     filter: drop-shadow(0 2px 3px rgb(23 61 50 / .24));
     stroke-width: 21;
-  }
-
-  .calendar-cell > div:first-child {
-    transition: transform .18s ease, filter .18s ease;
-  }
-
-  .calendar-cell:hover > div:first-child,
-  .calendar-cell:focus > div:first-child {
-    filter: saturate(1.2) drop-shadow(0 3px 5px rgb(23 61 50 / .22));
-    transform: scale(1.12);
   }
 
   svg[viewBox="0 0 620 250"] path {
@@ -236,11 +219,6 @@
 @keyframes bar-in {
   from { opacity: 0; transform: scaleY(0); }
   to { opacity: 1; transform: scaleY(1); }
-}
-
-@keyframes cell-in {
-  from { opacity: 0; transform: scale(.72); }
-  to { opacity: 1; transform: scale(1); }
 }
 
 @keyframes chart-line-in {
