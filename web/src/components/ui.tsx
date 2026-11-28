@@ -83,6 +83,7 @@ export function TrendChart({ series, startsOn, endsOn, settings, mae }: {
   mae: number | null
 }) {
   const [hover, setHover] = useState<number | null>(null)
+  const [selected, setSelected] = useState<number | null>(null)
   const span = Math.max(1, daysBetween(startsOn, endsOn))
   const points = series.map((item) => ({
     date: item.date,
@@ -113,16 +114,11 @@ export function TrendChart({ series, startsOn, endsOn, settings, mae }: {
   }
   const banded = points.filter((p) => p.lower !== null && p.upper !== null)
   const band = banded.length > 1 ? [...banded.map((p) => `${x(p.index)},${y(p.upper as number)}`), ...[...banded].reverse().map((p) => `${x(p.index)},${y(p.lower as number)}`)].join(' ') : ''
-  const gaps = points
-    .filter((p) => p.actual !== null && p.predicted !== null)
-    .map((p) => ({ ...p, gap: Math.abs((p.actual as number) - (p.predicted as number)) }))
-    .sort((a, b) => b.gap - a.gap)
-    .reduce<Array<{ index: number; actual: number | null; predicted: number | null; gap: number }>>((picked, p) => (picked.length < 2 && picked.every((q) => Math.abs(q.index - p.index) >= Math.max(3, span / 8)) ? [...picked, p] : picked), [])
   const labels = Array.from({ length: 7 }, (_, i) => Math.round((i * span) / 6))
-  const active = hover === null ? null : points[hover]
+  const active = (selected ?? hover) === null ? null : points[(selected ?? hover) as number]
   const tipX = active ? Math.min(640, Math.max(65, x(active.index) - 62)) : 0
   return <div className="mt-5 w-full overflow-hidden">
-    <div className="mb-2 flex flex-wrap gap-4 text-[10px] text-slate-500"><span className="flex items-center gap-2"><i className="h-0.5 w-5 bg-[#27715f]"/>Aktual</span><span className="flex items-center gap-2"><i className="h-0 w-5 border-t-2 border-dashed border-orange-400"/>Prediksi</span><span className="flex items-center gap-2"><i className="h-2 w-5 bg-slate-200"/>Rentang perkiraan</span></div>
+    <div className="mb-2 flex flex-wrap gap-4 text-[10px] text-slate-500"><span className="flex items-center gap-2"><i className="h-0.5 w-5 bg-[#27715f]"/>Aktual</span><span className="flex items-center gap-2"><i className="h-0 w-5 border-t-2 border-dashed border-orange-400"/>Prediksi</span><span className="flex items-center gap-2"><i className="h-2 w-5 bg-slate-200"/>Rentang perkiraan</span><span className="text-emerald-700">Klik titik untuk detail satu hari</span></div>
     <svg viewBox="0 0 800 285" className="h-auto min-h-[245px] w-full" role="img" aria-label="Perbandingan aktual dan prediksi limbah dalam kilogram">
       {settings && <><rect x="58" y={y(chartMax)} width="712" height={y(warning) - y(chartMax)} fill="#fee2e2" opacity=".55"/><rect x="58" y={y(warning)} width="712" height={y(safe) - y(warning)} fill="#fef3c7" opacity=".7"/><rect x="58" y={y(safe)} width="712" height={y(0) - y(safe)} fill="#dcfce7" opacity=".55"/></>}
       {Array.from({ length: Math.round(chartMax / step) + 1 }, (_, i) => i * step).map((v) => <g key={v}><line x1="58" y1={y(v)} x2="770" y2={y(v)} stroke="#dce3df"/><text x="48" y={y(v) + 4} textAnchor="end" fontSize="9" fill="#82908a">{v} kg</text></g>)}
@@ -130,11 +126,10 @@ export function TrendChart({ series, startsOn, endsOn, settings, mae }: {
       {band && <polygon points={band} fill="#94a3b8" opacity=".18"/>}
       <path className="chart-line chart-line-dashed" d={line('predicted')} fill="none" stroke="#e99a3d" strokeWidth="2.5" strokeDasharray="7 6"/>
       <path className="chart-line" d={line('actual')} fill="none" stroke="#27715f" strokeWidth="3"/>
-      {points.map((p, i) => p.predicted !== null && p.actual === null && <circle key={`p${i}`} cx={x(p.index)} cy={y(p.predicted)} r={hover === i ? 5 : 3} fill="#e99a3d" tabIndex={0} className="chart-point" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(i)} onBlur={() => setHover(null)}/>)}
-      {points.map((p, i) => p.actual !== null && <circle className="chart-point" tabIndex={0} key={i} cx={x(p.index)} cy={y(p.actual)} r={hover === i ? 6 : 4} fill="white" stroke="#27715f" strokeWidth="2" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(i)} onBlur={() => setHover(null)}/>)}
+      {points.map((p, i) => p.predicted !== null && p.actual === null && <circle key={`p${i}`} cx={x(p.index)} cy={y(p.predicted)} r={(selected ?? hover) === i ? 5 : 3} fill="#e99a3d" tabIndex={0} role="button" aria-label={`Pilih detail ${mediumDate(p.date)}`} className="chart-point" onClick={() => setSelected((current) => current === i ? null : i)} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(i)} onBlur={() => setHover(null)}/>)}
+      {points.map((p, i) => p.actual !== null && <circle className="chart-point" tabIndex={0} role="button" aria-label={`Pilih detail ${mediumDate(p.date)}`} key={i} cx={x(p.index)} cy={y(p.actual)} r={(selected ?? hover) === i ? 6 : 4} fill="white" stroke="#27715f" strokeWidth="2" onClick={() => setSelected((current) => current === i ? null : i)} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(i)} onBlur={() => setHover(null)}/>)}
       {labels.map((i) => <text key={i} x={x(i)} y="270" textAnchor="middle" fontSize="9" fill="#82908a">{shortDate(addDays(startsOn, i))}</text>)}
       <text x="414" y="283" textAnchor="middle" fontSize="9" fill="#82908a">Tanggal</text>
-      {gaps.map((p) => { const top = Math.max(p.actual as number, p.predicted as number); return <g key={`g${p.index}`}><line x1={x(p.index)} y1={y(top) - 5} x2={x(p.index)} y2={Math.max(14, y(top) - 28)} stroke="#b45309"/><rect x={x(p.index) - 37} y={Math.max(0, y(top) - 47)} width="74" height="20" rx="6" fill="#fff7ed"/><text x={x(p.index)} y={Math.max(13, y(top) - 34)} textAnchor="middle" fontSize="8" fontWeight="700" fill="#b45309">Selisih {kg(p.gap)} kg</text></g> })}
       {!points.length && <text x="414" y="140" textAnchor="middle" fontSize="11" fill="#82908a">Belum ada data operasional pada periode ini</text>}
       {active && <g><rect x={tipX} y="10" width="135" height="57" rx="8" fill="#173d32"/><text x={tipX + 9} y="26" fontSize="8" fill="white">{mediumDate(active.date)}</text><text x={tipX + 9} y="40" fontSize="8" fill="#d1fae5">Aktual {kg(active.actual)} kg · Prediksi {kg(active.predicted)} kg</text><text x={tipX + 9} y="54" fontSize="8" fill="#fdba74">{active.actual !== null && active.predicted !== null ? `Selisih ${kg(Math.abs(active.actual - active.predicted))} kg` : active.actual === null ? 'Limbah aktual belum dicatat' : 'Belum ada prediksi tersimpan'}</text></g>}
     </svg>
